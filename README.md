@@ -1,1 +1,1 @@
-# discord_bot
+# Discrod бот разработнный пользователем Slavik (78060)
