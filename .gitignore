@@ -1,3 +1,8 @@
+configs_folder/
+perms_data.json
+setings.json
+perms_manager.py
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
