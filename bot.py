@@ -12,7 +12,6 @@ import logging
 import discord
 from discord.ext import commands
 from discord.ui import View, Select
-from discord import FFmpegPCMAudio
 import discord.app_commands
 
 import math
