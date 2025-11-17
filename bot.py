@@ -517,8 +517,8 @@ async def restart_process(interaction_or_ctx=None):
     await asyncio.sleep(0.5)
 
     # перезапуск процесса
-    python = sys.executable
-    os.execv(python, [python] + sys.argv)
+    python = sys.executable           # путь к Python
+    os.execv(python, [python, str(__file__)] + sys.argv[1:])
 
 
 # ------------------ bot commands ------------------
