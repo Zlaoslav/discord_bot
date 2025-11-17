@@ -2,6 +2,7 @@ configs_folder/
 perms_data.json
 setings.json
 perms_manager.py
+bot_state.db
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
