@@ -15,13 +15,9 @@ from discord.ui import View, Select
 from discord import FFmpegPCMAudio
 import discord.app_commands
 
-import yt_dlp
 import math
 import ast
-import traceback
 
-import time
-from datetime import datetime, timedelta
 from playwright.async_api import async_playwright
 
 # Импорт системы управления правами
