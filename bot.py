@@ -532,17 +532,14 @@ async def restart_process(interaction_or_ctx=None):
     except Exception as e:
         logging.debug(f"Ошибка при закрытии бота: {e}")
 
-    # Небольшая пауза перед стартом нового процесса
+    # Небольшая пауза перед заменой процесса
     await asyncio.sleep(0.5)
 
     try:
-        # Запускаем start.py в новом процессе
-        import subprocess
-        subprocess.Popen([python, start_file])
-        # Завершаем текущий процесс
-        os._exit(0)
+        # Заменяем текущий процесс на start.py (один процесс)
+        os.execv(python, [python, start_file])
     except Exception as e:
-        logging.exception(f"Ошибка при запуске start.py: {e}")
+        logging.exception(f"Ошибка при запуске start.py через execv: {e}")
         os._exit(1)
 
 async def quickrestart_process(interaction_or_ctx=None):
