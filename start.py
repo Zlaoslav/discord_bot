@@ -52,16 +52,24 @@ def install_requirements():
 def run_bot_loop():
     """Запускает бота в цикле. При завершении автоматически перезапускает."""
     first_run = True
+    ffmpeg_file = CURRENT_DIR / "ffmpeg"
+    # Попытка дать права на выполнение ffmpeg (только для Unix)
+    if ffmpeg_file.exists():
+        try:
+            os.chmod(ffmpeg_file, 0o755)
+            print(f"[INFO] ffmpeg: права на выполнение установлены")
+        except Exception as e:
+            print(f"[WARNING] Не удалось установить права на ffmpeg: {e}")
     while True:
         if not BOT_FILE.exists():
             print(f"[ERROR] Не найден {BOT_FILE}")
             sys.exit(1)
-        
+
         quick_restart_flag = BOT_FILE.parent / ".quick_restart"
         shutdown_flag = BOT_FILE.parent / ".shutdown"
         is_quick_restart = quick_restart_flag.exists()
         is_shutdown = shutdown_flag.exists()
-        
+
         # При полном рестарте обновляем файлы с репозитория (но не при быстром)
         if not first_run and not is_quick_restart and not is_shutdown:
             print("[INFO] Обновление файлов перед перезапуском...")
@@ -70,7 +78,7 @@ def run_bot_loop():
                 install_requirements()
             except Exception as e:
                 print(f"[WARNING] Ошибка при обновлении: {e}")
-        
+
         # Удаляем флаги если они существуют
         if is_quick_restart:
             try:
@@ -78,7 +86,7 @@ def run_bot_loop():
                 print("[INFO] Быстрый перезапуск (без обновления файлов)")
             except Exception:
                 pass
-        
+
         if is_shutdown:
             try:
                 shutdown_flag.unlink()
@@ -86,22 +94,22 @@ def run_bot_loop():
                 pass
             print("[INFO] Бот выключен. Завершение работы.")
             sys.exit(0)
-        
+
         print("[INFO] Запуск бота...")
         process = subprocess.Popen([sys.executable, str(BOT_FILE)],
                                    stdout=subprocess.PIPE,
                                    stderr=subprocess.STDOUT,
                                    text=True)
-        
+
         for line in process.stdout:
             print(line, end="")
-        
+
         process.wait()
         exit_code = process.returncode
         print(f"[INFO] Бот завершил работу с кодом {exit_code}")
-        
+
         first_run = False
-        
+
         # После завершения ждём 2 секунды перед перезапуском
         print("[INFO] Перезапуск через 2 секунды...")
         time.sleep(2)
