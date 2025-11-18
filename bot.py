@@ -487,39 +487,59 @@ async def clear_local_slash():
         logging.error(f"Ошибка при clear_local_slash: {e}")
         return False
 
+# ------------------ restart process setup ------------------
 async def restart_process(interaction_or_ctx=None):
     """
     Сохраняет канал (если interaction_or_ctx передан), отвечает пользователю и перезапускает процесс.
     Если передан interaction (slash) — отправляет response, если ctx (prefix) — использует ctx.send.
     """
-    # определяем канал для уведомления:
     channel_id = None
     try:
-        # interaction (app command)
         if hasattr(interaction_or_ctx, "channel") and hasattr(interaction_or_ctx, "response"):
-            # если interaction содержит custom attribute restart_target (см. команду ниже),
-            # то он уже сохранил нужный channel_id в interaction_or_ctx.restart_target
             channel_id = getattr(interaction_or_ctx, "restart_target", None) or interaction_or_ctx.channel.id
-            # быстрый ответ перед рестартом (чтобы не получить "Приложение не отвечает")
-            await interaction_or_ctx.response.send_message("♻️ Перезапускаюсь...", ephemeral=True)
-        # ctx (prefix)
+            try:
+                await interaction_or_ctx.response.send_message("♻️ Перезапускаюсь...", ephemeral=True)
+            except Exception as e:
+                logging.debug(f"Не удалось отправить interaction.response: {e}")
         elif hasattr(interaction_or_ctx, "send") and hasattr(interaction_or_ctx, "author"):
             channel_id = getattr(interaction_or_ctx, "restart_target", None) or interaction_or_ctx.channel.id
-            await interaction_or_ctx.send("♻️ Перезапускаюсь...")
-    except Exception:
-        # если не получилось ответить — всё равно продолжим рестарт, но сохраним канал
-        pass
+            try:
+                await interaction_or_ctx.send("♻️ Перезапускаюсь...")
+            except Exception as e:
+                logging.debug(f"Не удалось отправить ctx.send: {e}")
+    except Exception as e:
+        logging.exception(f"Ошибка при подготовке ответа перед рестартом: {e}")
 
-    # сохраняем в БД канал (может быть None)
-    save_restart_channel(int(channel_id) if channel_id is not None else None)
+    try:
+        save_restart_channel(int(channel_id) if channel_id is not None else None)
+    except Exception as e:
+        logging.exception(f"Ошибка при сохранении channel_id в БД: {e}")
 
-    # небольшая пауза чтобы response/сообщение успели отправиться в сеть
     await asyncio.sleep(0.5)
 
-    # перезапуск процесса
     python = sys.executable
-    start_file = os.path.join(os.path.dirname(__file__), "start.py")
-    os.execv(python, [python, start_file] + sys.argv[1:])
+    start_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "start.py"))
+
+    # если start.py есть — запускаем его, иначе перезапускаем тот же скрипт (fallback)
+    if os.path.exists(start_file):
+        args = [python, start_file] + sys.argv[1:]
+    else:
+        logging.warning(f"start.py не найден по пути {start_file}, использую fallback перезапуск текущего процесса.")
+        args = [python] + sys.argv
+
+    logging.info(f"Перезапуск процесса: {args}")
+    try:
+        os.execv(python, args)
+    except Exception as e:
+        logging.exception(f"os.execv не удался: {e}")
+        # если execv упал — пробуем через subprocess и выходим
+        try:
+            import subprocess
+            subprocess.Popen(args)
+            os._exit(0)
+        except Exception as e2:
+            logging.exception(f"Не удалось запустить subprocess fallback: {e2}")
+            raise
 
 async def quickrestart_process(interaction_or_ctx=None):
     """
