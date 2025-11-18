@@ -526,20 +526,13 @@ async def restart_process(interaction_or_ctx=None):
     # Небольшая пауза перед завершением
     await asyncio.sleep(0.5)
 
-    # Создаём флаг для завершения (без перезапуска) если это был shutdown
-    shutdown_flag = os.path.join(os.path.dirname(__file__), ".shutdown")
-    try:
-        with open(shutdown_flag, "w") as f:
-            f.write("")
-    except Exception as e:
-        logging.debug(f"Не удалось создать флаг завершения: {e}")
-
-    # Завершаем процесс бота (start.py автоматически перезапустит его)
+    # Завершаем процесс бота (start.py автоматически перезапустит его с обновлением файлов)
     logging.info("Завершение процесса для перезапуска...")
     os._exit(0)
 
 async def quickrestart_process(interaction_or_ctx=None):
     """
+    Быстрый перезапуск без обновления файлов.
     Сохраняет канал (если interaction_or_ctx передан), отвечает пользователю и перезапускает процесс.
     Если передан interaction (slash) — отправляет response, если ctx (prefix) — использует ctx.send.
     """
@@ -548,21 +541,25 @@ async def quickrestart_process(interaction_or_ctx=None):
     try:
         # interaction (app command)
         if hasattr(interaction_or_ctx, "channel") and hasattr(interaction_or_ctx, "response"):
-            # если interaction содержит custom attribute restart_target (см. команду ниже),
-            # то он уже сохранил нужный channel_id в interaction_or_ctx.restart_target
             channel_id = getattr(interaction_or_ctx, "restart_target", None) or interaction_or_ctx.channel.id
-            # быстрый ответ перед рестартом (чтобы не получить "Приложение не отвечает")
-            await interaction_or_ctx.response.send_message("♻️ Перезапускаюсь...", ephemeral=True)
+            await interaction_or_ctx.response.send_message("⚡ Быстрый перезапуск...", ephemeral=True)
         # ctx (prefix)
         elif hasattr(interaction_or_ctx, "send") and hasattr(interaction_or_ctx, "author"):
             channel_id = getattr(interaction_or_ctx, "restart_target", None) or interaction_or_ctx.channel.id
-            await interaction_or_ctx.send("♻️ Перезапускаюсь...")
+            await interaction_or_ctx.send("⚡ Быстрый перезапуск...")
     except Exception:
-        # если не получилось ответить — всё равно продолжим рестарт, но сохраним канал
         pass
 
     # сохраняем в БД канал (может быть None)
     save_restart_channel(int(channel_id) if channel_id is not None else None)
+
+    # создаём флаг быстрого перезапуска
+    quick_restart_flag = os.path.join(os.path.dirname(__file__), ".quick_restart")
+    try:
+        with open(quick_restart_flag, "w") as f:
+            f.write("")
+    except Exception as e:
+        logging.debug(f"Не удалось создать флаг быстрого перезапуска: {e}")
 
     # небольшая пауза чтобы response/сообщение успели отправиться в сеть
     await asyncio.sleep(0.5)
@@ -576,7 +573,7 @@ async def quickrestart_process(interaction_or_ctx=None):
     # Небольшая пауза перед завершением
     await asyncio.sleep(0.5)
 
-    # Завершаем процесс бота (start.py автоматически перезапустит его)
+    # Завершаем процесс бота (start.py перезапустит его БЕЗ обновления файлов)
     logging.info("Завершение процесса для быстрого перезапуска...")
     os._exit(0)
 

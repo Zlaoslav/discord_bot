@@ -57,14 +57,35 @@ def run_bot_loop():
             print(f"[ERROR] Не найден {BOT_FILE}")
             sys.exit(1)
         
-        # При рестарте обновляем файлы с репозитория
-        if not first_run:
+        quick_restart_flag = BOT_FILE.parent / ".quick_restart"
+        shutdown_flag = BOT_FILE.parent / ".shutdown"
+        is_quick_restart = quick_restart_flag.exists()
+        is_shutdown = shutdown_flag.exists()
+        
+        # При полном рестарте обновляем файлы с репозитория (но не при быстром)
+        if not first_run and not is_quick_restart and not is_shutdown:
             print("[INFO] Обновление файлов перед перезапуском...")
             try:
                 git_update()
                 install_requirements()
             except Exception as e:
                 print(f"[WARNING] Ошибка при обновлении: {e}")
+        
+        # Удаляем флаги если они существуют
+        if is_quick_restart:
+            try:
+                quick_restart_flag.unlink()
+                print("[INFO] Быстрый перезапуск (без обновления файлов)")
+            except Exception:
+                pass
+        
+        if is_shutdown:
+            try:
+                shutdown_flag.unlink()
+            except Exception:
+                pass
+            print("[INFO] Бот выключен. Завершение работы.")
+            sys.exit(0)
         
         print("[INFO] Запуск бота...")
         process = subprocess.Popen([sys.executable, str(BOT_FILE)],
