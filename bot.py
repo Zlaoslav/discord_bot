@@ -520,6 +520,39 @@ async def restart_process(interaction_or_ctx=None):
     python = sys.executable           # путь к Python
     os.execv(python, [python, str(__file__)] + sys.argv[1:])
 
+async def quickrestart_process(interaction_or_ctx=None):
+    """
+    Сохраняет канал (если interaction_or_ctx передан), отвечает пользователю и перезапускает процесс.
+    Если передан interaction (slash) — отправляет response, если ctx (prefix) — использует ctx.send.
+    """
+    # определяем канал для уведомления:
+    channel_id = None
+    try:
+        # interaction (app command)
+        if hasattr(interaction_or_ctx, "channel") and hasattr(interaction_or_ctx, "response"):
+            # если interaction содержит custom attribute restart_target (см. команду ниже),
+            # то он уже сохранил нужный channel_id в interaction_or_ctx.restart_target
+            channel_id = getattr(interaction_or_ctx, "restart_target", None) or interaction_or_ctx.channel.id
+            # быстрый ответ перед рестартом (чтобы не получить "Приложение не отвечает")
+            await interaction_or_ctx.response.send_message("♻️ Перезапускаюсь...", ephemeral=True)
+        # ctx (prefix)
+        elif hasattr(interaction_or_ctx, "send") and hasattr(interaction_or_ctx, "author"):
+            channel_id = getattr(interaction_or_ctx, "restart_target", None) or interaction_or_ctx.channel.id
+            await interaction_or_ctx.send("♻️ Перезапускаюсь...")
+    except Exception:
+        # если не получилось ответить — всё равно продолжим рестарт, но сохраним канал
+        pass
+
+    # сохраняем в БД канал (может быть None)
+    save_restart_channel(int(channel_id) if channel_id is not None else None)
+
+    # небольшая пауза чтобы response/сообщение успели отправиться в сеть
+    await asyncio.sleep(0.5)
+
+    # перезапуск процесса
+    python = sys.executable
+    os.execv(python, [python] + sys.argv)
+
 
 # ------------------ bot commands ------------------
 def mainbotstart():
@@ -597,6 +630,18 @@ def mainbotstart():
 
         await restart_process(ctx)
 
+    @bot.command(name="quickrestartbot")
+    async def restart_prefix(ctx: commands.Context, channel_id: Optional[int] = None):
+        if not has_perm(ctx.author.id, PermRole.HOST):
+            await ctx.send("У вас нет прав для этой команды.")
+            return
+
+        if channel_id:
+            ctx.restart_target = channel_id
+        else:
+            ctx.restart_target = ctx.channel.id
+
+        await quickrestart_process(ctx)
 
     # ----------------------------
     # SLASH: /myperms
