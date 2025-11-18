@@ -1261,6 +1261,13 @@ def mainbotstart():
         if "@here" in message.content.lower():
             await message.reply(r"https://tenor.com/view/everyone-discord-gif-18237159", mention_author=True, delete_after=10)
         
+        if "да" in message.content.lower():
+            if random.randint(1, 50) == 1:
+                await message.reply(r"пизда", mention_author=True, delete_after=10)   
+
+        if "нет" in message.content.lower():
+            if random.randint(1, 50) == 1:
+                await message.reply(r"пидора ответ", mention_author=True, delete_after=10)
         
         TENOR_RE = re.compile(r"https?://(?:www\.)?tenor\.com", re.IGNORECASE)
         DS_RE = re.compile(r"https://media.discordapp.net/")
