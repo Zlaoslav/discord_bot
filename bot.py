@@ -559,9 +559,18 @@ async def quickrestart_process(interaction_or_ctx=None):
     # небольшая пауза чтобы response/сообщение успели отправиться в сеть
     await asyncio.sleep(0.5)
 
-    # перезапуск процесса
-    python = sys.executable
-    os.execv(python, [python] + sys.argv)
+    try:
+        # Закрываем бота
+        await bot.close()
+    except Exception as e:
+        logging.debug(f"Ошибка при закрытии бота: {e}")
+
+    # Небольшая пауза перед завершением
+    await asyncio.sleep(0.5)
+
+    # Завершаем процесс бота (start.py автоматически перезапустит его)
+    logging.info("Завершение процесса для быстрого перезапуска...")
+    os._exit(0)
 
 
 # ------------------ bot commands ------------------

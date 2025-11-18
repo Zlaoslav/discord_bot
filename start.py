@@ -50,10 +50,20 @@ def install_requirements():
 # ------------------- Запуск бота с автоматическим перезапуском -------------------
 def run_bot_loop():
     """Запускает бота в цикле. При завершении автоматически перезапускает."""
+    first_run = True
     while True:
         if not BOT_FILE.exists():
             print(f"[ERROR] Не найден {BOT_FILE}")
             sys.exit(1)
+        
+        # При рестарте обновляем файлы с репозитория
+        if not first_run:
+            print("[INFO] Обновление файлов перед перезапуском...")
+            try:
+                git_update()
+                install_requirements()
+            except Exception as e:
+                print(f"[WARNING] Ошибка при обновлении: {e}")
         
         print("[INFO] Запуск бота...")
         process = subprocess.Popen([sys.executable, str(BOT_FILE)],
@@ -67,6 +77,8 @@ def run_bot_loop():
         process.wait()
         exit_code = process.returncode
         print(f"[INFO] Бот завершил работу с кодом {exit_code}")
+        
+        first_run = False
         
         # После завершения ждём 2 секунды перед перезапуском
         print("[INFO] Перезапуск через 2 секунды...")
