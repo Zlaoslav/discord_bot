@@ -1250,24 +1250,24 @@ def mainbotstart():
             await message.reply(r"https://tenor.com/view/fuck-you-gif-27037587", mention_author=True, delete_after=10)
 
         if "осуждаю" in message.content.lower():
-            await message.reply(r"https://tenor.com/view/%D1%81%D1%82%D0%B8%D0%BD%D1%82-%D1%81%D1%82%D0%B8%D0%BD%D1%82%D0%B8%D0%BA-stint-stintik-%D0%B8%D1%81%D0%BF%D1%83%D0%B3%D0%B0%D0%BB%D1%81%D1%8F-gif-8740975965519379714", mention_author=True, delete_after=10)
+            await message.reply(r"https://tenor.com/view/%D1%81%D1%82%D0%B8%D0%BD%D1%82-%D1%81%D1%82%D0%B8%D0%BD%D1%82%D0%B8%D0%BA-stint-stintik-%D0%B8%D1%81%D0%BF%D1%83%D0%B3%D0%B0%D0%BB%D1%81%D1%8F-gif-8740975965519379714", mention_author=True, delete_after=15)
 
         if r"||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​" in message.content.lower():
-            await message.reply(r"https://tenor.com/view/ghost-ping-troll-discord-gif-20744771", mention_author=True, delete_after=10)
+            await message.reply(r"https://tenor.com/view/ghost-ping-troll-discord-gif-20744771", mention_author=True)
         
         if "@everyone" in message.content.lower():
-            await message.reply(r"https://tenor.com/view/everyone-discord-konosuba-gif-21395141", mention_author=True, delete_after=10)
+            await message.reply(r"https://tenor.com/view/everyone-discord-konosuba-gif-21395141", mention_author=True, delete_after=15)
         
         if "@here" in message.content.lower():
-            await message.reply(r"https://tenor.com/view/everyone-discord-gif-18237159", mention_author=True, delete_after=10)
+            await message.reply(r"https://tenor.com/view/everyone-discord-gif-18237159", mention_author=True, delete_after=15)
         
         if "да" in message.content.lower():
             if random.randint(1, 50) == 1:
-                await message.reply(r"пизда", mention_author=True, delete_after=10)   
+                await message.reply(r"пизда", mention_author=True, delete_after=60)   
 
         if "нет" in message.content.lower():
             if random.randint(1, 50) == 1:
-                await message.reply(r"пидора ответ", mention_author=True, delete_after=10)
+                await message.reply(r"пидора ответ", mention_author=True, delete_after=60)
         
         TENOR_RE = re.compile(r"https?://(?:www\.)?tenor\.com", re.IGNORECASE)
         DS_RE = re.compile(r"https://media.discordapp.net/")
