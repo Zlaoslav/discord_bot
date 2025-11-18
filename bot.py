@@ -517,30 +517,18 @@ async def restart_process(interaction_or_ctx=None):
 
     await asyncio.sleep(0.5)
 
-    python = sys.executable
-    start_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "start.py"))
-
-    if not os.path.exists(start_file):
-        logging.error(f"start.py не найден по пути {start_file}")
-        return
-
-    logging.info(f"Запуск start.py: {python} {start_file}")
-    
     try:
         # Закрываем бота
         await bot.close()
     except Exception as e:
         logging.debug(f"Ошибка при закрытии бота: {e}")
 
-    # Небольшая пауза перед заменой процесса
+    # Небольшая пауза перед завершением
     await asyncio.sleep(0.5)
 
-    try:
-        # Заменяем текущий процесс на start.py (один процесс)
-        os.execv(python, [python, start_file])
-    except Exception as e:
-        logging.exception(f"Ошибка при запуске start.py через execv: {e}")
-        os._exit(1)
+    # Завершаем процесс бота (start.py автоматически перезапустит его)
+    logging.info("Завершение процесса для перезапуска...")
+    os._exit(0)
 
 async def quickrestart_process(interaction_or_ctx=None):
     """

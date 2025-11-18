@@ -50,7 +50,6 @@ def install_requirements():
 # ------------------- Запуск бота с автоматическим перезапуском -------------------
 def run_bot_loop():
     """Запускает бота в цикле. При завершении автоматически перезапускает."""
-    first_run = True
     while True:
         if not BOT_FILE.exists():
             print(f"[ERROR] Не найден {BOT_FILE}")
@@ -69,11 +68,7 @@ def run_bot_loop():
         exit_code = process.returncode
         print(f"[INFO] Бот завершил работу с кодом {exit_code}")
         
-        # Если первый запуск — выходим
-        if first_run:
-            break
-        
-        # После рестарта ждём 2 секунды перед перезапуском
+        # После завершения ждём 2 секунды перед перезапуском
         print("[INFO] Перезапуск через 2 секунды...")
         time.sleep(2)
 
