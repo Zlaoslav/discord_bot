@@ -517,8 +517,9 @@ async def restart_process(interaction_or_ctx=None):
     await asyncio.sleep(0.5)
 
     # перезапуск процесса
-    python = sys.executable           # путь к Python
-    os.execv(python, [python, str(__file__)] + sys.argv[1:])
+    python = sys.executable
+    start_file = os.path.join(os.path.dirname(__file__), "start.py")
+    os.execv(python, [python, start_file] + sys.argv[1:])
 
 async def quickrestart_process(interaction_or_ctx=None):
     """
