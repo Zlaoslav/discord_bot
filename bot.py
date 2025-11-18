@@ -520,26 +520,30 @@ async def restart_process(interaction_or_ctx=None):
     python = sys.executable
     start_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "start.py"))
 
-    # если start.py есть — запускаем его, иначе перезапускаем тот же скрипт (fallback)
-    if os.path.exists(start_file):
-        args = [python, start_file] + sys.argv[1:]
-    else:
-        logging.warning(f"start.py не найден по пути {start_file}, использую fallback перезапуск текущего процесса.")
-        args = [python] + sys.argv
+    if not os.path.exists(start_file):
+        logging.error(f"start.py не найден по пути {start_file}")
+        return
 
-    logging.info(f"Перезапуск процесса: {args}")
+    logging.info(f"Запуск start.py: {python} {start_file}")
+    
     try:
-        os.execv(python, args)
+        # Закрываем бота
+        await bot.close()
     except Exception as e:
-        logging.exception(f"os.execv не удался: {e}")
-        # если execv упал — пробуем через subprocess и выходим
-        try:
-            import subprocess
-            subprocess.Popen(args)
-            os._exit(0)
-        except Exception as e2:
-            logging.exception(f"Не удалось запустить subprocess fallback: {e2}")
-            raise
+        logging.debug(f"Ошибка при закрытии бота: {e}")
+
+    # Небольшая пауза перед стартом нового процесса
+    await asyncio.sleep(0.5)
+
+    try:
+        # Запускаем start.py в новом процессе
+        import subprocess
+        subprocess.Popen([python, start_file])
+        # Завершаем текущий процесс
+        os._exit(0)
+    except Exception as e:
+        logging.exception(f"Ошибка при запуске start.py: {e}")
+        os._exit(1)
 
 async def quickrestart_process(interaction_or_ctx=None):
     """
