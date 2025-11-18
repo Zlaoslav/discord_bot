@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 import shutil
 import time
+import os
 
 CURRENT_DIR = Path(__file__).parent.resolve()
 BOT_FILE = CURRENT_DIR / "bot.py"

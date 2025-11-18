@@ -526,6 +526,14 @@ async def restart_process(interaction_or_ctx=None):
     # Небольшая пауза перед завершением
     await asyncio.sleep(0.5)
 
+    # Создаём флаг для завершения (без перезапуска) если это был shutdown
+    shutdown_flag = os.path.join(os.path.dirname(__file__), ".shutdown")
+    try:
+        with open(shutdown_flag, "w") as f:
+            f.write("")
+    except Exception as e:
+        logging.debug(f"Не удалось создать флаг завершения: {e}")
+
     # Завершаем процесс бота (start.py автоматически перезапустит его)
     logging.info("Завершение процесса для перезапуска...")
     os._exit(0)
@@ -631,6 +639,14 @@ def mainbotstart():
         try:
             await ctx.guild.voice_client.disconnect()
         except: pass
+
+        # Создаём флаг shutdown для корректного завершения
+        shutdown_flag = os.path.join(os.path.dirname(__file__), ".shutdown")
+        try:
+            with open(shutdown_flag, "w") as f:
+                f.write("")
+        except Exception:
+            pass
 
         await bot.close()
 
