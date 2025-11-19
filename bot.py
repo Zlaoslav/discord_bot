@@ -1216,6 +1216,40 @@ def mainbotstart():
         await interaction.response.send_message("Выберите звук для воспроизведения:", view=view, ephemeral=False)
 
     # ----------------------------
+    # SLASH: /set_slowmode time
+    # ----------------------------
+    @bot.tree.command(name="set_slowmode", description="Установить slowmode в текущем канале (секунды)")
+    async def set_slowmode(interaction: discord.Interaction, seconds: int):
+        # проверка — команда только на сервере
+        if interaction.guild is None:
+            await interaction.response.send_message("Команда только на сервере.", ephemeral=True)
+            return
+
+        # проверяем право пользователя управлять каналами (в этом канале)
+        channel = interaction.channel
+        if not isinstance(channel, discord.TextChannel):
+            await interaction.response.send_message("Команду можно использовать только в текстовом канале.", ephemeral=True)
+            return
+
+        if not channel.permissions_for(interaction.user).manage_channels:
+            await interaction.response.send_message("У вас нет права `Manage Channels` в этом канале.", ephemeral=True)
+            return
+
+        # проверяем лимиты
+        if seconds < 0 or seconds > 21600:
+            await interaction.response.send_message("Значение должно быть от 0 до 21600 секунд.", ephemeral=True)
+            return
+
+        try:
+            await channel.edit(slowmode_delay=seconds, reason=f"Установлено {interaction.user} через бота")
+        except Exception as e:
+            await interaction.response.send_message(f"Не удалось изменить slowmode: {e}", ephemeral=True)
+            logger.error(e)
+            return
+
+        await interaction.response.send_message(f"Slowmode установлен: {seconds} секунд.", ephemeral=False)
+
+    # ----------------------------
     # SLASH: Команды кубиков
     # ----------------------------
     @bot.tree.command(name="d6", description="Подкинуть кубик d6")
