@@ -1,0 +1,161 @@
+name: Discord notifications
+
+on:
+  push:
+  issues:
+    types: [opened, closed, reopened]
+  pull_request:
+    types: [opened, closed, reopened]
+  watch:
+    types: [started]   # новый звездочный "star"
+  fork:
+    types: [created]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send embed to Discord
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          EVENT=${{ github.event_name }}
+          ACTOR=${{ github.actor }}
+          REPO=${{ github.repository }}
+
+          # ------ PUSH ------
+          if [ "$EVENT" = "push" ]; then
+            COMMITS=$(jq -r '[.commits[].message] | join("\n")' <<< '${{ toJson(github.event) }}')
+            BRANCH=${{ github.ref_name }}
+            COLOR=3066993
+
+            PAYLOAD=$(jq -n \
+              --arg title "Новый push" \
+              --arg repo "$REPO" \
+              --arg actor "$ACTOR" \
+              --arg branch "$BRANCH" \
+              --arg commits "$COMMITS" \
+              --argjson color $COLOR \
+              '{
+                embeds: [{
+                  title: $title,
+                  color: $color,
+                  fields: [
+                    {name: "Репозиторий", value: $repo, inline: true},
+                    {name: "Автор", value: $actor, inline: true},
+                    {name: "Ветка", value: $branch, inline: true},
+                    {name: "Коммиты", value: $commits}
+                  ]
+                }]
+              }'
+            )
+          fi
+
+          # ------ ISSUES ------
+          if [ "$EVENT" = "issues" ]; then
+            ACTION=${{ github.event.action }}
+            TITLE=${{ github.event.issue.title }}
+            URL=${{ github.event.issue.html_url }}
+            COLOR=3447003
+
+            PAYLOAD=$(jq -n \
+              --arg title "Issue: $ACTION" \
+              --arg repo "$REPO" \
+              --arg actor "$ACTOR" \
+              --arg issue "$TITLE" \
+              --arg url "$URL" \
+              --argjson color $COLOR \
+              '{
+                embeds: [{
+                  title: $title,
+                  url: $url,
+                  color: $color,
+                  fields: [
+                    {name: "Репозиторий", value: $repo},
+                    {name: "Автор", value: $actor},
+                    {name: "Issue", value: $issue}
+                  ]
+                }]
+              }'
+            )
+          fi
+
+          # ------ PULL REQUESTS ------
+          if [ "$EVENT" = "pull_request" ]; then
+            ACTION=${{ github.event.action }}
+            TITLE=${{ github.event.pull_request.title }}
+            URL=${{ github.event.pull_request.html_url }}
+            COLOR=15105570
+
+            PAYLOAD=$(jq -n \
+              --arg title "Pull request: $ACTION" \
+              --arg repo "$REPO" \
+              --arg actor "$ACTOR" \
+              --arg pr "$TITLE" \
+              --arg url "$URL" \
+              --argjson color $COLOR \
+              '{
+                embeds: [{
+                  title: $title,
+                  url: $url,
+                  color: $color,
+                  fields: [
+                    {name: "Репозиторий", value: $repo},
+                    {name: "Автор", value: $actor},
+                    {name: "Pull Request", value: $pr}
+                  ]
+                }]
+              }'
+            )
+          fi
+
+          # ------ NEW STAR ------
+          if [ "$EVENT" = "watch" ]; then
+            COLOR=16776960
+
+            PAYLOAD=$(jq -n \
+              --arg title "Новая звезда ⭐" \
+              --arg repo "$REPO" \
+              --arg actor "$ACTOR" \
+              --argjson color $COLOR \
+              '{
+                embeds: [{
+                  title: $title,
+                  color: $color,
+                  fields: [
+                    {name: "Репозиторий", value: $repo},
+                    {name: "Добавил звезду", value: $actor}
+                  ]
+                }]
+              }'
+            )
+          fi
+
+          # ------ NEW FORK ------
+          if [ "$EVENT" = "fork" ]; then
+            COLOR=12370112
+
+            PAYLOAD=$(jq -n \
+              --arg title "Новый форк 🍴" \
+              --arg repo "$REPO" \
+              --arg actor "$ACTOR" \
+              --argjson color $COLOR \
+              '{
+                embeds: [{
+                  title: $title,
+                  color: $color,
+                  fields: [
+                    {name: "Репозиторий", value: $repo},
+                    {name: "Сделал форк", value: $actor}
+                  ]
+                }]
+              }'
+            )
+          fi
+
+          # Отправка
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "$WEBHOOK_URL"
