@@ -85,6 +85,7 @@ PELLA_PASSWORD = config_setings["PELLA_PASSWORD"]
 intents = discord.Intents.default()
 intents.members = True          # нужен для работы с Member объектами
 intents.message_content = True  # нужен для префикс-команд (чтение сообщений)
+intents.reactions = True        # нужен для обработки реакций
 bot = commands.Bot(command_prefix="?", intents=intents)  # ПРЕФИКС
 GUILD = discord.Object(id=GUILD_ID)
 
@@ -198,6 +199,17 @@ def _init_db():
     """)
     # гарантируем одну строку с id=1
     cur.execute("INSERT OR IGNORE INTO restart_state (id, channel_id) VALUES (1, NULL);")
+    
+    # Таблица для role_reaction (реакции с автоматической выдачей ролей)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS role_reactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            message_id INTEGER UNIQUE NOT NULL,
+            channel_id INTEGER NOT NULL,
+            emoji TEXT NOT NULL,
+            role_id INTEGER NOT NULL
+        );
+    """)
     conn.commit()
     conn.close()
 
@@ -257,12 +269,42 @@ async def notify_after_restart():
         await ch.send("✅ Бот успешно перезапущен.")
     except Exception as e:
         logging.warning(f"Ошибка при отправке уведомления о рестарте: {e}")
-        # попытка написать владельцу в личку
-        try:
-            owner = bot.get_user(OWNER_ID) or await bot.fetch_user(OWNER_ID)
-            await owner.send(f"Ошибка при отправке уведомления о рестарте: {e}")
-        except Exception:
-            pass
+
+# --- Функции работы с role_reactions ---
+def save_role_reaction(message_id: int, channel_id: int, emoji: str, role_id: int) -> None:
+    """Сохраняет информацию о role_reaction в БД."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT OR REPLACE INTO role_reactions (message_id, channel_id, emoji, role_id)
+        VALUES (?, ?, ?, ?)
+    """, (message_id, channel_id, emoji, role_id))
+    conn.commit()
+    conn.close()
+
+def get_role_reaction(message_id: int, emoji: str) -> Optional[tuple]:
+    """Получает информацию о role_reaction: (message_id, channel_id, emoji, role_id)."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT message_id, channel_id, emoji, role_id FROM role_reactions
+        WHERE message_id = ? AND emoji = ?
+    """, (message_id, emoji))
+    row = cur.fetchone()
+    conn.close()
+    return row
+
+def get_all_role_reactions_for_message(message_id: int) -> list:
+    """Получает все role_reactions для сообщения."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT message_id, channel_id, emoji, role_id FROM role_reactions
+        WHERE message_id = ?
+    """, (message_id,))
+    rows = cur.fetchall()
+    conn.close()
+    return rows
 
 # ------------------ calculate setup ------------------
 
@@ -1274,6 +1316,56 @@ def mainbotstart():
             await interaction.response.send_message("Ошибка, недопустимые числа!", ephemeral=True)
 
     # ----------------------------
+    # SLASH: Role Reaction (реакции с выдачей ролей)
+    # ----------------------------
+    @bot.tree.command(name="role_reaction", description="Создать сообщение с реакцией для выдачи роли")
+    @discord.app_commands.describe(
+        emoji="Эмодзи для реакции",
+        role="Роль для выдачи при реакции"
+    )
+    async def role_reaction(interaction: discord.Interaction, emoji: str, role: discord.Role):
+        """Создаёт сообщение в канале с реакцией, которая выдаёт роль."""
+        
+        # Проверяем права
+        if not interaction.user.guild_permissions.manage_roles:
+            await interaction.response.send_message("❌ У вас нет прав на управление ролями.", ephemeral=True)
+            return
+        
+        bot_member = interaction.guild.get_member(bot.user.id)
+        if not bot_member or not bot_member.guild_permissions.manage_roles:
+            await interaction.response.send_message("❌ У бота нет прав на управление ролями.", ephemeral=True)
+            return
+        
+        if role.position >= bot_member.top_role.position:
+            await interaction.response.send_message("❌ Не могу управлять этой ролью. Роль выше или равна роли бота.", ephemeral=True)
+            return
+        
+        # Отправляем сообщение в канал
+        channel = interaction.channel
+        message = await channel.send(f"Нажмите {emoji} чтобы получить роль {role.mention}")
+        
+        # Добавляем реакцию
+        try:
+            await message.add_reaction(emoji)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Не удалось добавить реакцию: {e}", ephemeral=True)
+            await message.delete()
+            return
+        
+        # Сохраняем в БД
+        try:
+            save_role_reaction(message.id, channel.id, emoji, role.id)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка при сохранении в БД: {e}", ephemeral=True)
+            await message.delete()
+            return
+        
+        await interaction.response.send_message(
+            f"✅ Сообщение создано! Реакция: {emoji}, Роль: {role.mention}",
+            ephemeral=True
+        )
+
+    # ----------------------------
     # ОБРАБОТКА ОСТАЛЬНЫХ СООБЩЕНИЙ
     # ----------------------------      
     async def on_sus_message(message):
@@ -1328,6 +1420,93 @@ def mainbotstart():
                     mention_author=True
                     )
                 
+
+    # ----------------------------
+    # Обработчики для role_reactions
+    # ----------------------------
+    @bot.event
+    async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
+        """Обработчик добавления реакции."""
+        if payload.user_id == bot.user.id:
+            return  # Игнорируем реакции самого бота
+        
+        # Получаем информацию о роле из БД
+        emoji_str = str(payload.emoji)
+        role_data = get_role_reaction(payload.message_id, emoji_str)
+        
+        if not role_data:
+            return  # Нет роли для этой реакции
+        
+        try:
+            guild = bot.get_guild(payload.guild_id)
+            if not guild:
+                return
+            
+            member = guild.get_member(payload.user_id)
+            if not member:
+                member = await guild.fetch_member(payload.user_id)
+            
+            role_id = role_data[3]
+            role = guild.get_role(role_id)
+            
+            if not role:
+                return
+            
+            # Проверяем, есть ли уже роль у пользователя
+            if role not in member.roles:
+                await member.add_roles(role, reason=f"Role reaction на {emoji_str}")
+                
+                # Отправляем сообщение в канал
+                channel = guild.get_channel(payload.channel_id)
+                if channel:
+                    try:
+                        await channel.send(f"{member.mention} была выдана {role.mention}")
+                    except Exception as e:
+                        logging.warning(f"Не удалось отправить сообщение о выдаче роли: {e}")
+        except Exception as e:
+            logging.error(f"Ошибка при добавлении роли на реакцию: {e}")
+
+    @bot.event
+    async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
+        """Обработчик удаления реакции."""
+        if payload.user_id == bot.user.id:
+            return  # Игнорируем реакции самого бота
+        
+        # Получаем информацию о роле из БД
+        emoji_str = str(payload.emoji)
+        role_data = get_role_reaction(payload.message_id, emoji_str)
+        
+        if not role_data:
+            return  # Нет роли для этой реакции
+        
+        try:
+            guild = bot.get_guild(payload.guild_id)
+            if not guild:
+                return
+            
+            member = guild.get_member(payload.user_id)
+            if not member:
+                member = await guild.fetch_member(payload.user_id)
+            
+            role_id = role_data[3]
+            role = guild.get_role(role_id)
+            
+            if not role:
+                return
+            
+            # Проверяем, есть ли роль у пользователя
+            if role in member.roles:
+                await member.remove_roles(role, reason=f"Удалена реакция на {emoji_str}")
+                
+                # Отправляем сообщение в канал
+                channel = guild.get_channel(payload.channel_id)
+                if channel:
+                    try:
+                        await channel.send(f"{member.mention} была забрана {role.mention}")
+                    except Exception as e:
+                        logging.warning(f"Не удалось отправить сообщение об удалении роли: {e}")
+        except Exception as e:
+            logging.error(f"Ошибка при удалении роли на реакцию: {e}")
 
     @bot.event
     async def on_message(message: discord.Message):
