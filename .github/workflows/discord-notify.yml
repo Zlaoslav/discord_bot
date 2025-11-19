@@ -1,161 +1,212 @@
-name: Discord notifications
+name: Discord notifications (embed)
 
 on:
   push:
   issues:
     types: [opened, closed, reopened]
   pull_request:
-    types: [opened, closed, reopened]
+    types: [opened, closed, reopened, labeled, unlabeled, synchronize]
   watch:
-    types: [started]   # новый звездочный "star"
+    types: [started]     # star
   fork:
     types: [created]
+  release:
+    types: [published]
+  workflow_dispatch:    # ручной запуск для теста
 
 jobs:
   notify:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Send embed to Discord
+      - name: Prepare environment
         env:
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          EVENT_JSON: '${{ toJson(github.event) }}'
         run: |
-          EVENT=${{ github.event_name }}
-          ACTOR=${{ github.actor }}
-          REPO=${{ github.repository }}
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "WEBHOOK_URL is empty. Set secret DISCORD_WEBHOOK."
+            exit 1
+          fi
 
-          # ------ PUSH ------
-          if [ "$EVENT" = "push" ]; then
-            COMMITS=$(jq -r '[.commits[].message] | join("\n")' <<< '${{ toJson(github.event) }}')
+          # helper: escape for jq
+          EVENT_NAME_ESC=$(jq -Rn --arg in "$EVENT_NAME" '$in')
+          REPO_ESC=$(jq -Rn --arg in "$REPO" '$in')
+          ACTOR_ESC=$(jq -Rn --arg in "$ACTOR" '$in')
+
+          # default payload (fallback)
+          PAYLOAD=$(jq -n --arg title "GitHub: $REPO" --arg desc "Event: $EVENT_NAME" --arg actor "$ACTOR" '{
+            embeds: [{ title: $title, description: $desc, color: 3447003, fields: [{name:"Actor", value:$actor}]}]
+          }')
+
+          # PUSH
+          if [ "$EVENT_NAME" = "push" ]; then
             BRANCH=${{ github.ref_name }}
-            COLOR=3066993
-
+            COMMITS=$(echo "$EVENT_JSON" | jq -r '[.commits[] | ("• [" + (.id|.[:7]) + "](" + .url + ") " + ( .message | split("\n")[0] ) + " — " + (.author.name // .author.email) )] | join("\n")')
+            SHORT_COMMITS=$(echo "$COMMITS" | head -c 1500)
+            COMPARE=$(echo "$EVENT_JSON" | jq -r .compare)
             PAYLOAD=$(jq -n \
-              --arg title "Новый push" \
+              --arg title "Push to $BRANCH" \
               --arg repo "$REPO" \
               --arg actor "$ACTOR" \
-              --arg branch "$BRANCH" \
-              --arg commits "$COMMITS" \
-              --argjson color $COLOR \
+              --arg commits "$SHORT_COMMITS" \
+              --arg compare "$COMPARE" \
+              --argjson color 3066993 \
               '{
                 embeds: [{
                   title: $title,
+                  url: $compare,
                   color: $color,
                   fields: [
                     {name: "Репозиторий", value: $repo, inline: true},
                     {name: "Автор", value: $actor, inline: true},
-                    {name: "Ветка", value: $branch, inline: true},
-                    {name: "Коммиты", value: $commits}
+                    {name: "Коммиты", value: ($commits // "Нет коммитов")}
                   ]
                 }]
               }'
             )
           fi
 
-          # ------ ISSUES ------
-          if [ "$EVENT" = "issues" ]; then
-            ACTION=${{ github.event.action }}
-            TITLE=${{ github.event.issue.title }}
-            URL=${{ github.event.issue.html_url }}
-            COLOR=3447003
-
+          # ISSUES
+          if [ "$EVENT_NAME" = "issues" ]; then
+            ACTION=$(echo "$EVENT_JSON" | jq -r .action)
+            TITLE=$(echo "$EVENT_JSON" | jq -r .issue.title)
+            URL=$(echo "$EVENT_JSON" | jq -r .issue.html_url)
+            BODY=$(echo "$EVENT_JSON" | jq -r .issue.body | sed 's/"/\\"/g' | head -c 1500)
             PAYLOAD=$(jq -n \
-              --arg title "Issue: $ACTION" \
+              --arg title "Issue: ${ACTION^}" \
+              --arg url "$URL" \
               --arg repo "$REPO" \
               --arg actor "$ACTOR" \
               --arg issue "$TITLE" \
-              --arg url "$URL" \
-              --argjson color $COLOR \
+              --arg body "$BODY" \
+              --argjson color 3447003 \
               '{
                 embeds: [{
                   title: $title,
                   url: $url,
                   color: $color,
                   fields: [
-                    {name: "Репозиторий", value: $repo},
-                    {name: "Автор", value: $actor},
-                    {name: "Issue", value: $issue}
+                    {name:"Репозиторий", value:$repo, inline:true},
+                    {name:"Автор", value:$actor, inline:true},
+                    {name:"Issue", value:$issue},
+                    {name:"Body (preview)", value:($body|if .=="" then "—" else . end)}
                   ]
                 }]
               }'
             )
           fi
 
-          # ------ PULL REQUESTS ------
-          if [ "$EVENT" = "pull_request" ]; then
-            ACTION=${{ github.event.action }}
-            TITLE=${{ github.event.pull_request.title }}
-            URL=${{ github.event.pull_request.html_url }}
-            COLOR=15105570
-
+          # PULL REQUEST
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            ACTION=$(echo "$EVENT_JSON" | jq -r .action)
+            TITLE=$(echo "$EVENT_JSON" | jq -r .pull_request.title)
+            URL=$(echo "$EVENT_JSON" | jq -r .pull_request.html_url)
+            PR_NUM=$(echo "$EVENT_JSON" | jq -r .number)
             PAYLOAD=$(jq -n \
-              --arg title "Pull request: $ACTION" \
+              --arg title "Pull Request: ${ACTION^}" \
+              --arg url "$URL" \
               --arg repo "$REPO" \
               --arg actor "$ACTOR" \
               --arg pr "$TITLE" \
-              --arg url "$URL" \
-              --argjson color $COLOR \
+              --arg prnum "$PR_NUM" \
+              --argjson color 15105570 \
               '{
                 embeds: [{
                   title: $title,
                   url: $url,
                   color: $color,
                   fields: [
-                    {name: "Репозиторий", value: $repo},
-                    {name: "Автор", value: $actor},
-                    {name: "Pull Request", value: $pr}
+                    {name:"Репозиторий", value:$repo, inline:true},
+                    {name:"Автор", value:$actor, inline:true},
+                    {name:"PR", value:("#" + $prnum + " — " + $pr)}
                   ]
                 }]
               }'
             )
           fi
 
-          # ------ NEW STAR ------
-          if [ "$EVENT" = "watch" ]; then
-            COLOR=16776960
-
+          # WATCH (star)
+          if [ "$EVENT_NAME" = "watch" ]; then
             PAYLOAD=$(jq -n \
               --arg title "Новая звезда ⭐" \
               --arg repo "$REPO" \
               --arg actor "$ACTOR" \
-              --argjson color $COLOR \
+              --argjson color 16776960 \
               '{
                 embeds: [{
                   title: $title,
                   color: $color,
                   fields: [
-                    {name: "Репозиторий", value: $repo},
-                    {name: "Добавил звезду", value: $actor}
+                    {name:"Репозиторий", value:$repo},
+                    {name:"Поставил(а) звезду", value:$actor}
                   ]
                 }]
               }'
             )
           fi
 
-          # ------ NEW FORK ------
-          if [ "$EVENT" = "fork" ]; then
-            COLOR=12370112
-
+          # FORK
+          if [ "$EVENT_NAME" = "fork" ]; then
+            FORK_OWNER=$(echo "$EVENT_JSON" | jq -r .forkee.owner.login)
+            FORK_URL=$(echo "$EVENT_JSON" | jq -r .forkee.html_url)
             PAYLOAD=$(jq -n \
               --arg title "Новый форк 🍴" \
               --arg repo "$REPO" \
               --arg actor "$ACTOR" \
-              --argjson color $COLOR \
+              --arg forker "$FORK_OWNER" \
+              --arg url "$FORK_URL" \
+              --argjson color 12370112 \
               '{
                 embeds: [{
                   title: $title,
+                  url: $url,
                   color: $color,
                   fields: [
-                    {name: "Репозиторий", value: $repo},
-                    {name: "Сделал форк", value: $actor}
+                    {name:"Репозиторий", value:$repo},
+                    {name:"Кто сделал форк", value:$forker}
                   ]
                 }]
               }'
             )
           fi
 
-          # Отправка
-          curl -X POST \
-            -H "Content-Type: application/json" \
-            -d "$PAYLOAD" \
+          # RELEASE
+          if [ "$EVENT_NAME" = "release" ]; then
+            ACTION=$(echo "$EVENT_JSON" | jq -r .action)
+            TAG=$(echo "$EVENT_JSON" | jq -r .release.tag_name)
+            URL=$(echo "$EVENT_JSON" | jq -r .release.html_url)
+            BODY=$(echo "$EVENT_JSON" | jq -r .release.body | head -c 1500)
+            PAYLOAD=$(jq -n \
+              --arg title "New Release: $TAG" \
+              --arg repo "$REPO" \
+              --arg actor "$ACTOR" \
+              --arg url "$URL" \
+              --arg body "$BODY" \
+              --argjson color 3066993 \
+              '{
+                embeds: [{
+                  title: $title,
+                  url: $url,
+                  color: $color,
+                  fields: [
+                    {name:"Репозиторий", value:$repo},
+                    {name:"Автор", value:$actor},
+                    {name:"Описание (preview)", value:($body|if .=="" then "—" else . end)}
+                  ]
+                }]
+              }'
+            )
+          fi
+
+          # Final: send to Discord
+          echo "Sending payload to Discord..."
+          echo "$PAYLOAD" | jq -c . > /tmp/gh_payload.json
+          cat /tmp/gh_payload.json
+
+          curl -s -H "Content-Type: application/json" \
+            -X POST \
+            --data-binary @/tmp/gh_payload.json \
             "$WEBHOOK_URL"
