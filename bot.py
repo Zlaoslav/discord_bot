@@ -101,7 +101,7 @@ USERNAME = os.getenv("USERNAME") or "unknown"
 if USERNAME == "slavi":
     FFMPEG_PATH = r"C:\Code\Paths\ffmpeg\bin\ffmpeg.exe"
 else:
-    FFMPEG_PATH = SCRIPT_DIR / "ffmpeg"
+    FFMPEG_PATH = str(SCRIPT_DIR / "ffmpeg")  # Преобразуем в строку
 BASE_DIR = Path(__file__).resolve().parent
 SOUNDS_DIR = BASE_DIR / "sounds"
 ALLOWED_EXT = (".mp3", ".wav", ".ogg", ".m4a")
