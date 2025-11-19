@@ -128,7 +128,7 @@ class SoundSelect(Select):
 
     async def callback(self, interaction: discord.Interaction):
         # защита: только инициатор может выбрать или пользователь с правом SOUNDPAD
-        if interaction.user.id != self.author_id and not has_perm(interaction.user.id, PermRole.SOUNDPAD):
+        if interaction.user.id != self.author_id or not has_perm(interaction.user.id, PermRole.SOUNDPAD):
             await interaction.response.send_message(f"<@{interaction.user.id}>, Только инициатор может выбрать звук.", ephemeral=False)
             return
         # проверки
