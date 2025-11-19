@@ -1479,9 +1479,9 @@ def mainbotstart():
             # Отправляем личное сообщение пользователю
             try:
                 if had_role:
-                    await member.send(f"ℹ️ Вы уже имели роль {role.mention}")
+                    await member.send(f"ℹ️ Вы уже имели роль **{role.name}**")
                 else:
-                    await member.send(f"✅ Вам была выдана роль {role.mention}")
+                    await member.send(f"✅ Вам была выдана роль **{role.name}**")
             except Exception as e:
                 logging.warning(f"Не удалось отправить личное сообщение о выдаче роли: {e}")
         except Exception as e:
@@ -1524,9 +1524,9 @@ def mainbotstart():
             # Отправляем личное сообщение пользователю
             try:
                 if had_role:
-                    await member.send(f"✅ Вам была забрана роль {role.mention}")
+                    await member.send(f"✅ Вам была забрана роль **{role.name}**")
                 else:
-                    await member.send(f"ℹ️ Вы не имели роль {role.mention}")
+                    await member.send(f"ℹ️ Вы не имели роль **{role.name}**")
             except Exception as e:
                 logging.warning(f"Не удалось отправить личное сообщение об удалении роли: {e}")
         except Exception as e:
