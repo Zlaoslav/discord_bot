@@ -140,6 +140,17 @@ class SoundSelect(Select):
             await interaction.response.send_message("ffmpeg не найден.", ephemeral=True)
             logging.error(f"FFMPEG not found at: {FFMPEG_PATH}")
             return
+        
+        # Проверяем и устанавливаем права на выполнение если нужно
+        try:
+            import stat
+            ffmpeg_stat = os.stat(FFMPEG_PATH)
+            if not (ffmpeg_stat.st_mode & stat.S_IXUSR):
+                os.chmod(FFMPEG_PATH, ffmpeg_stat.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+                logging.info(f"Установлены права на выполнение для {FFMPEG_PATH}")
+        except Exception as e:
+            logging.warning(f"Не удалось установить права на выполнение ffmpeg: {e}")
+        
         sound_filename = self.values[0]
         sound_path = os.path.join(SOUNDS_DIR, sound_filename)
         if not os.path.isfile(sound_path):
