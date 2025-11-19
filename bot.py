@@ -1528,9 +1528,9 @@ def mainbotstart():
             if channel:
                 try:
                     if had_role:
-                        await channel.send(f"{member.mention} была забрана {role.mention}")
+                        await channel.send(f"{member.mention} была забрана {role.mention}", ephemeral=True)
                     else:
-                        await channel.send(f"{member.mention} не имела {role.mention}")
+                        await channel.send(f"{member.mention} не имела {role.mention}", ephemeral=True)
                 except Exception as e:
                     logging.warning(f"Не удалось отправить сообщение об удалении роли: {e}")
             else:
