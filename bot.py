@@ -1481,9 +1481,9 @@ def mainbotstart():
             if channel:
                 try:
                     if had_role:
-                        await channel.send(f"{member.mention} уже имела {role.mention}")
+                        await channel.send(f"{member.mention} уже имела {role.mention}", ephemeral=True)
                     else:
-                        await channel.send(f"{member.mention} была выдана {role.mention}")
+                        await channel.send(f"{member.mention} была выдана {role.mention}", ephemeral=True)
                 except Exception as e:
                     logging.warning(f"Не удалось отправить сообщение о выдаче роли: {e}")
         except Exception as e:
