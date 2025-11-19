@@ -1471,18 +1471,21 @@ def mainbotstart():
                 return
             
             # Проверяем, есть ли уже роль у пользователя
-            if role not in member.roles:
+            had_role = role in member.roles
+            
+            if not had_role:
                 await member.add_roles(role, reason=f"Role reaction на {emoji_str}")
-                
-                # Отправляем сообщение в канал
-                channel = guild.get_channel(payload.channel_id)
-                if channel:
-                    try:
+            
+            # Отправляем сообщение в канал ВСЕГДА
+            channel = guild.get_channel(payload.channel_id)
+            if channel:
+                try:
+                    if had_role:
+                        await channel.send(f"{member.mention} уже имела {role.mention}")
+                    else:
                         await channel.send(f"{member.mention} была выдана {role.mention}")
-                    except Exception as e:
-                        logging.warning(f"Не удалось отправить сообщение о выдаче роли: {e}")
-            else:
-                logging.debug(f"Пользователь {member.id} уже имеет роль {role.id}")
+                except Exception as e:
+                    logging.warning(f"Не удалось отправить сообщение о выдаче роли: {e}")
         except Exception as e:
             logging.error(f"Ошибка при добавлении роли на реакцию: {e}")
 
@@ -1515,16 +1518,21 @@ def mainbotstart():
                 return
             
             # Проверяем, есть ли роль у пользователя
-            if role in member.roles:
+            had_role = role in member.roles
+            
+            if had_role:
                 await member.remove_roles(role, reason=f"Удалена реакция на {emoji_str}")
-                
-                # Отправляем сообщение в канал
-                channel = guild.get_channel(payload.channel_id)
-                if channel:
-                    try:
+            
+            # Отправляем сообщение в канал ВСЕГДА
+            channel = guild.get_channel(payload.channel_id)
+            if channel:
+                try:
+                    if had_role:
                         await channel.send(f"{member.mention} была забрана {role.mention}")
-                    except Exception as e:
-                        logging.warning(f"Не удалось отправить сообщение об удалении роли: {e}")
+                    else:
+                        await channel.send(f"{member.mention} не имела {role.mention}")
+                except Exception as e:
+                    logging.warning(f"Не удалось отправить сообщение об удалении роли: {e}")
             else:
                 logging.debug(f"Пользователь {member.id} не имеет роль {role.id}")
         except Exception as e:
