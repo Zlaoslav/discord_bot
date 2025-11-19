@@ -1476,16 +1476,14 @@ def mainbotstart():
             if not had_role:
                 await member.add_roles(role, reason=f"Role reaction на {emoji_str}")
             
-            # Отправляем сообщение в канал, видимое только пользователю (эфемерное)
-            channel = guild.get_channel(payload.channel_id)
-            if channel:
-                try:
-                    if had_role:
-                        await channel.send(f"{member.mention} ℹ️ Вы уже имели роль {role.mention}", delete_after=5)
-                    else:
-                        await channel.send(f"{member.mention} ✅ Вам была выдана роль {role.mention}", delete_after=5)
-                except Exception as e:
-                    logging.warning(f"Не удалось отправить сообщение о выдаче роли: {e}")
+            # Отправляем личное сообщение пользователю
+            try:
+                if had_role:
+                    await member.send(f"ℹ️ Вы уже имели роль {role.mention}")
+                else:
+                    await member.send(f"✅ Вам была выдана роль {role.mention}")
+            except Exception as e:
+                logging.warning(f"Не удалось отправить личное сообщение о выдаче роли: {e}")
         except Exception as e:
             logging.error(f"Ошибка при добавлении роли на реакцию: {e}")
 
@@ -1523,16 +1521,14 @@ def mainbotstart():
             if had_role:
                 await member.remove_roles(role, reason=f"Удалена реакция на {emoji_str}")
             
-            # Отправляем сообщение в канал, видимое только пользователю (эфемерное)
-            channel = guild.get_channel(payload.channel_id)
-            if channel:
-                try:
-                    if had_role:
-                        await channel.send(f"{member.mention} ✅ Вам была забрана роль {role.mention}", delete_after=5)
-                    else:
-                        await channel.send(f"{member.mention} ℹ️ Вы не имели роль {role.mention}", delete_after=5)
-                except Exception as e:
-                    logging.warning(f"Не удалось отправить сообщение об удалении роли: {e}")
+            # Отправляем личное сообщение пользователю
+            try:
+                if had_role:
+                    await member.send(f"✅ Вам была забрана роль {role.mention}")
+                else:
+                    await member.send(f"ℹ️ Вы не имели роль {role.mention}")
+            except Exception as e:
+                logging.warning(f"Не удалось отправить личное сообщение об удалении роли: {e}")
         except Exception as e:
             logging.error(f"Ошибка при удалении роли на реакцию: {e}")
 
