@@ -306,6 +306,16 @@ def get_all_role_reactions_for_message(message_id: int) -> list:
     conn.close()
     return rows
 
+def delete_role_reaction(message_id: int) -> None:
+    """Удаляет role_reaction из БД по ID сообщения."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""
+        DELETE FROM role_reactions WHERE message_id = ?
+    """, (message_id,))
+    conn.commit()
+    conn.close()
+
 # ------------------ calculate setup ------------------
 
 
@@ -1425,6 +1435,14 @@ def mainbotstart():
     # Обработчики для role_reactions
     # ----------------------------
     @bot.event
+    async def on_raw_message_delete(payload: discord.RawMessageDeleteEvent):
+        """Обработчик удаления сообщения - удаляет role_reaction из БД."""
+        try:
+            delete_role_reaction(payload.message_id)
+        except Exception as e:
+            logging.error(f"Ошибка при удалении role_reaction из БД: {e}")
+
+    @bot.event
     async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
         """Обработчик добавления реакции."""
         if payload.user_id == bot.user.id:
@@ -1463,6 +1481,8 @@ def mainbotstart():
                         await channel.send(f"{member.mention} была выдана {role.mention}")
                     except Exception as e:
                         logging.warning(f"Не удалось отправить сообщение о выдаче роли: {e}")
+            else:
+                logging.debug(f"Пользователь {member.id} уже имеет роль {role.id}")
         except Exception as e:
             logging.error(f"Ошибка при добавлении роли на реакцию: {e}")
 
@@ -1505,6 +1525,8 @@ def mainbotstart():
                         await channel.send(f"{member.mention} была забрана {role.mention}")
                     except Exception as e:
                         logging.warning(f"Не удалось отправить сообщение об удалении роли: {e}")
+            else:
+                logging.debug(f"Пользователь {member.id} не имеет роль {role.id}")
         except Exception as e:
             logging.error(f"Ошибка при удалении роли на реакцию: {e}")
 
