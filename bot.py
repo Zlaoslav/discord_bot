@@ -838,7 +838,6 @@ def mainbotstart():
 
     # ----------------------------
     # SLASH: /editperms user role action
-    # action: add|remove
     # ----------------------------
     @bot.tree.command(name="editperms", description="Добавить/удалить роль пользователю (permsmanager+)")
     async def editperms(
