@@ -1127,15 +1127,15 @@ def mainbotstart():
         await interaction.response.defer(ephemeral=False)
 
         if interaction.guild is None:
-            await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
+            await interaction.followup.send("Эта команда работает только на сервере.", ephemeral=False)
             return
         
         if not has_perm(interaction.user.id, PermRole.OWNER):
-            await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
+            await interaction.followup.send("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logging.debug(f"{interaction.user.name} try use askgpt")
             return
         
-        await interaction.response.send_message("Я в россии, увы без гемини", ephemeral=False)
+        await interaction.followup.send("Я в россии, увы без гемини", ephemeral=False)
     
     # ----------------------------
     # SLASH: /stopsound
