@@ -1427,7 +1427,7 @@ def mainbotstart():
             return
         targetchanel = channel or interaction.channel
         try:
-            save_join_leave_channel(targetchanel)
+            save_join_leave_channel(targetchanel.id)
             await interaction.response.send_message("Успешно!", ephemeral=True)
         except Exception as e:
             logger.error(e)
