@@ -213,6 +213,12 @@ def _init_db():
     
     # Таблица для role_reaction (реакции с автоматической выдачей ролей)
     cur.execute("""
+        CREATE TABLE IF NOT EXISTS join_leave (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            channel_id INTEGER NOT NULL
+        );
+    """)
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS role_reactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             message_id INTEGER UNIQUE NOT NULL,
@@ -225,6 +231,26 @@ def _init_db():
     conn.close()
 
 _init_db()
+
+# --- Функции работы с каналом join_leave рестарта ---
+def save_join_leave_channel(channel_id: Optional[int]) -> None:
+    """Сохраняет ID канала, куда надо отправить уведомление при выходе/входе участниках на сервер."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("UPDATE join_leave SET channel_id = ? WHERE id = 1;", (channel_id,))
+    conn.commit()
+    conn.close()
+
+def get_join_leave_channel() -> Optional[int]:
+    """Возвращает сохранённый channel_id для leave join."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("SELECT channel_id FROM join_leave WHERE id = 1;")
+    row = cur.fetchone()
+    channel_id = row[0] if row else None
+    conn.commit()
+    conn.close()
+    return channel_id
 
 # --- Функции работы с состоянием рестарта ---
 def save_restart_channel(channel_id: Optional[int]) -> None:
@@ -669,8 +695,8 @@ def mainbotstart():
         else:
             await ctx.send("❌ Ошибка при удалении локальных команд. Смотри лог.")
 
-    @bot.command(name="enablecmds")
-    async def enablecmds(ctx: commands.Context):
+    @bot.command(name="synccmds")
+    async def synccmds(ctx: commands.Context):
         if not has_perm(ctx.author.id, PermRole.OWNER):
             await ctx.send("У вас нет прав для этой команды.")
             return
@@ -1386,6 +1412,28 @@ def mainbotstart():
         )
 
     # ----------------------------
+    # SLASH: set_leavejoin_channel
+    # ----------------------------
+    @bot.tree.command(name="set_leavejoin_channel", description="Установить канал с сообщениями о входе и выходе с сервера [owner]")
+    async def leave(interaction: discord.Interaction, channel: discord.TextChannel | None = None):
+
+        if interaction.guild is None:
+            await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
+            return
+        
+        if not has_perm(interaction.user.id, PermRole.OWNER):
+            await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=False)
+            logging.debug(f"{interaction.user.name} try use leave")
+            return
+        targetchanel = channel or interaction.channel
+        try:
+            save_join_leave_channel(targetchanel)
+            await interaction.response.send_message("Успешно!", ephemeral=True)
+        except Exception as e:
+            logger.error(e)
+            await interaction.response.send_message("Ошибка установки канала! (см логи)", ephemeral=False)
+        
+    # ----------------------------
     # ОБРАБОТКА ОСТАЛЬНЫХ СООБЩЕНИЙ
     # ----------------------------      
     async def on_sus_message(message):
@@ -1407,11 +1455,11 @@ def mainbotstart():
         if "@here" in message.content.lower():
             await message.reply(r"https://tenor.com/view/everyone-discord-gif-18237159", mention_author=True, delete_after=15)
         
-        if "да" in message.content.lower():
+        if "да" == message.content.lower():
             if random.randint(1, 50) == 1:
                 await message.reply(r"пизда", mention_author=True, delete_after=60)   
 
-        if "нет" in message.content.lower():
+        if "нет" == message.content.lower():
             if random.randint(1, 50) == 1:
                 await message.reply(r"пидора ответ", mention_author=True, delete_after=60)
         
@@ -1440,7 +1488,22 @@ def mainbotstart():
                     mention_author=True
                     )
                 
+    # ----------------------------
+    # Обработчики для выхода участника
+    # ----------------------------
+    @bot.event
+    async def on_member_remove(member):
+        channel_id = get_join_leave_channel()
+        if channel_id == None:
+            return
+        
+        channel = member.guild.get_channel(channel_id)
+        if channel is None:
+            return
 
+        await channel.send(
+            f"Пользователь {member.mention} ({member.name}) id: `{member.id}` покинул сервер."
+        )
     # ----------------------------
     # Обработчики для role_reactions
     # ----------------------------
