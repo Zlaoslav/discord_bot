@@ -211,13 +211,17 @@ def _init_db():
     # гарантируем одну строку с id=1
     cur.execute("INSERT OR IGNORE INTO restart_state (id, channel_id) VALUES (1, NULL);")
     
-    # Таблица для role_reaction (реакции с автоматической выдачей ролей)
+    # Таблица для join_leave
     cur.execute("""
         CREATE TABLE IF NOT EXISTS join_leave (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            channel_id INTEGER NOT NULL
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            channel_id INTEGER
         );
     """)
+    # гарантируем одну строку с id=1
+    cur.execute("INSERT OR IGNORE INTO join_leave (id, channel_id) VALUES (1, NULL);")
+    
+    # Таблица для role_reaction (реакции с автоматической выдачей ролей)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS role_reactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -232,9 +236,9 @@ def _init_db():
 
 _init_db()
 
-# --- Функции работы с каналом join_leave рестарта ---
+# --- Функции работы с каналом join_leave ---
 def save_join_leave_channel(channel_id: Optional[int]) -> None:
-    """Сохраняет ID канала, куда надо отправить уведомление при выходе/входе участниках на сервер."""
+    """Сохраняет ID канала, куда надо отправить уведомление при выходе/входе участников на сервер."""
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute("UPDATE join_leave SET channel_id = ? WHERE id = 1;", (channel_id,))
@@ -242,13 +246,12 @@ def save_join_leave_channel(channel_id: Optional[int]) -> None:
     conn.close()
 
 def get_join_leave_channel() -> Optional[int]:
-    """Возвращает сохранённый channel_id для leave join."""
+    """Возвращает сохранённый channel_id для join/leave."""
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute("SELECT channel_id FROM join_leave WHERE id = 1;")
     row = cur.fetchone()
     channel_id = row[0] if row else None
-    conn.commit()
     conn.close()
     return channel_id
 
