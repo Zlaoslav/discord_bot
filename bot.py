@@ -1412,9 +1412,9 @@ def mainbotstart():
         )
 
     # ----------------------------
-    # SLASH: set_leavejoin_channel
+    # SLASH: set_new_member_channel
     # ----------------------------
-    @bot.tree.command(name="set_leavejoin_channel", description="Установить канал с сообщениями о входе и выходе с сервера [owner]")
+    @bot.tree.command(name="set_new_member_channel", description="Установить канал с сообщениями о входе и выходе с сервера [owner]")
     async def leave(interaction: discord.Interaction, channel: discord.TextChannel | None = None):
 
         if interaction.guild is None:
@@ -1423,7 +1423,7 @@ def mainbotstart():
         
         if not has_perm(interaction.user.id, PermRole.OWNER):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=False)
-            logging.debug(f"{interaction.user.name} try use leave")
+            logging.debug(f"{interaction.user.name} try use set_new_member_channel")
             return
         targetchanel = channel or interaction.channel
         try:
@@ -1503,6 +1503,23 @@ def mainbotstart():
 
         await channel.send(
             f"Пользователь {member.mention} ({member.name}) id: `{member.id}` покинул сервер."
+        )
+
+    # ----------------------------
+    # Обработчики для входа участника
+    # ----------------------------
+    @bot.event
+    async def on_member_join(member):
+        channel_id = get_join_leave_channel()
+        if channel_id == None:
+            return
+        
+        channel = member.guild.get_channel(channel_id)
+        if channel is None:
+            return
+
+        await channel.send(
+            f"Добро пожаловать, {member.mention}! ({member.name}, id: `{member.id}` )",
         )
     # ----------------------------
     # Обработчики для role_reactions
