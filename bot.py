@@ -8,6 +8,8 @@ import sys
 import sqlite3
 import json
 import logging
+import socket
+import time
 
 import discord
 from discord.ext import commands
@@ -23,7 +25,11 @@ from playwright.async_api import async_playwright
 sys.path.insert(0, str(Path(__file__).parent / "configs_folder"))
 from configs_folder.perms_manager import PermRole, has_perm, get_user_roles, add_perm, remove_perm, init_perms, can_manage_role, get_hierarchy_level, get_role_description, INDEPENDENT_ROLES
 
-# ------------------ access setup ------------------
+# ------------------ main vars setup ------------------
+SCRIPT_DIR = Path(__file__).parent
+USERNAME = os.getenv("USERNAME") or "unknown"
+HOSTNAME = socket.gethostname()
+starttime = time.time()
 
 # ------------------ logging setup ------------------
 COLORS = {
@@ -69,6 +75,11 @@ logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 logger.addHandler(handler)
 
+def format_duration(seconds: int) -> str:
+    d, seconds = divmod(seconds, 86400)
+    h, seconds = divmod(seconds, 3600)
+    m, s = divmod(seconds, 60)
+    return "".join(f"{x}{y}" for x, y in [(d,"d"),(h,"h"),(m,"m"),(s,"s")] if x)
 
 # ------------------ setings setup ------------------
 CONFIGS_FODLER = Path(__file__).with_name("configs_folder")
@@ -96,8 +107,7 @@ OWNER_ID = 727105264486187090
 init_perms(OWNER_ID)
 
 # ------------------ sounds setup ------------------
-SCRIPT_DIR = Path(__file__).parent
-USERNAME = os.getenv("USERNAME") or "unknown"
+
 if USERNAME == "slavi":
     FFMPEG_PATH = r"C:\Code\Paths\ffmpeg\bin\ffmpeg.exe"
 else:
@@ -677,12 +687,13 @@ def mainbotstart():
     # ПРЕФИКС-КОМАНДА (пример)
     # ----------------------------
     @bot.command(name="дай_пять")
-    async def ping_cmd(ctx: commands.Context):
+    async def give_five(ctx: commands.Context):
         await ctx.send("https://cdn.discordapp.com/attachments/1350866065818783788/1434491390192255096/c0aced7c-94ef-4d24-aafa-480c618a74dd.gif?ex=69106eb6&is=690f1d36&hm=ba4189460e7fd7061f8f2928c6a75205ed4d8aaeeb5c04a3fb263745f2236cda&")
 
     @bot.command(name="ping")
     async def ping_cmd(ctx: commands.Context):
-        await ctx.send("Pong!")
+        uptime = int(time.time() - starttime)
+        await ctx.send(f"Host:{HOSTNAME}({USERNAME})\nUptime: {format_duration(uptime)}\nPing: {round(bot.latency * 1000)} ms")
 
     @bot.command(name="disablecmds")
     async def disablecmds(ctx: commands.Context):
