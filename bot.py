@@ -1454,6 +1454,9 @@ def mainbotstart():
     @bot.tree.command(name="chemical_reactions", description="Анализ и генерация возможных уравнений реакции по списку реагентов (owner only)")
     async def chemical_reactions(interaction: discord.Interaction, reactants: str):
 
+        await interaction.response.defer(ephemeral=False)
+
+
         # Парсим строку реагентов
         try:
             parts = chem_reactions.parse_reactants_from_string(reactants)
