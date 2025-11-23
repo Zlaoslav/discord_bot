@@ -304,46 +304,101 @@ def balance_equation(reactants: List[str], products: List[str]) -> Optional[Tupl
         # Только нулевая свобода — нет ненулевого решения
         return None
 
-    # Установим первую свободную переменную = 1
-    sol = [Fraction(0) for _ in range(cols)]
-    free = free_cols[0]
-    sol[free] = Fraction(1)
+    # Попробуем несколько вариантов выбора свободной переменной, чтобы получить положительные коэффициенты
+    candidates = []
+    for free in free_cols:
+        for free_val in range(1, 7):
+            sol_try = [Fraction(0) for _ in range(cols)]
+            sol_try[free] = Fraction(free_val)
+            row_idx = 0
+            for c in pivot_cols:
+                s = Fraction(0)
+                for j in range(c + 1, cols):
+                    s += A[row_idx][j] * sol_try[j]
+                sol_try[c] = -s
+                row_idx += 1
 
-    # Обратный ход: выразим ведущие переменные
-    # Найдём ведущие строки и соответств. столбцы
-    # Для каждой pivot column c (в строке i), сумма(A[i][j]*x[j]) = 0 => x[c] = -sum_{j!=c} A[i][j]*x[j]
-    # Найдём соответствие строк->pivot_col
-    row_idx = 0
-    for c in pivot_cols:
-        # строка row_idx содержит ведущий 1 в столбце c
-        s = Fraction(0)
-        for j in range(c + 1, cols):
-            s += A[row_idx][j] * sol[j]
-        sol[c] = -s
-        row_idx += 1
+            # Преобразуем в целые
+            denoms = [f.denominator for f in sol_try]
+            from math import gcd
+            from functools import reduce
+            lcm = 1
+            for d in denoms:
+                lcm = lcm * d // gcd(lcm, d)
+            ints_try = [int(f * lcm) for f in sol_try]
+            if all(v == 0 for v in ints_try):
+                continue
+            nonzero = [abs(v) for v in ints_try if v != 0]
+            if nonzero:
+                g = reduce(gcd, nonzero)
+                ints_try = [v // g for v in ints_try]
 
-    # Преобразуем в минимальные целые
-    denoms = [f.denominator for f in sol]
-    from math import gcd
-    from functools import reduce
+            react_coeffs_try = ints_try[: len(reactants)]
+            prod_coeffs_try = ints_try[len(reactants) :]
+            # prefer solutions where all coefficients are positive (no zeros)
+            if all(c > 0 for c in react_coeffs_try) and all(c > 0 for c in prod_coeffs_try):
+                candidates.append((sum(abs(v) for v in ints_try), ints_try))
 
-    lcm = 1
-    for d in denoms:
-        lcm = lcm * d // gcd(lcm, d)
-    ints = [int(f * lcm) for f in sol]
-    # Убедимся, что все положительные; если нужно, поменяем знак
-    # Мы ожидаем неотрицательные коэффициенты (реактанты и продукты)
-    # Если все нули, отказ
-    if all(v == 0 for v in ints):
-        return None
-    # Сделаем их минимальными (общий НОД)
-    nonzero = [abs(v) for v in ints if v != 0]
-    if nonzero:
-        g = reduce(gcd, nonzero)
-        ints = [v // g for v in ints]
+    # Если нашли подходящие варианты, выберем с минимальной суммой коэффициентов
+    if candidates:
+        candidates.sort(key=lambda x: x[0])
+        ints = candidates[0][1]
+    else:
+        # fallback — старое поведение (первый свободный столбец)
+        sol = [Fraction(0) for _ in range(cols)]
+        free = free_cols[0]
+        sol[free] = Fraction(1)
+        row_idx = 0
+        for c in pivot_cols:
+            s = Fraction(0)
+            for j in range(c + 1, cols):
+                s += A[row_idx][j] * sol[j]
+            sol[c] = -s
+            row_idx += 1
+        denoms = [f.denominator for f in sol]
+        from math import gcd
+        from functools import reduce
+
+        lcm = 1
+        for d in denoms:
+            lcm = lcm * d // gcd(lcm, d)
+        ints = [int(f * lcm) for f in sol]
+        nonzero = [abs(v) for v in ints if v != 0]
+        if nonzero:
+            g = reduce(gcd, nonzero)
+            ints = [v // g for v in ints]
+
+    # У нас есть окончательный массив ints (либо из candidates, либо из fallback)
 
     react_coeffs = ints[: len(reactants)]
     prod_coeffs = ints[len(reactants) :]
+    # If some product/reactant coefficients are zero or non-positive, try a small brute-force search
+    if any(c <= 0 for c in react_coeffs) or any(c <= 0 for c in prod_coeffs):
+        # brute-force small integer coefficients (1..8) to find a valid balancing where all coeff > 0
+        from collections import Counter
+        from itertools import product
+        max_coeff = 8
+        found = None
+        for r_choice in product(range(1, max_coeff + 1), repeat=len(reactants)):
+            left = Counter()
+            for coef, comp in zip(r_choice, parsed[:len(reactants)]):
+                for el, cnt in comp.items():
+                    left[el] += coef * cnt
+            for p_choice in product(range(1, max_coeff + 1), repeat=len(products)):
+                right = Counter()
+                for coef, comp in zip(p_choice, parsed[len(reactants):]):
+                    for el, cnt in comp.items():
+                        right[el] += coef * cnt
+                if left == right:
+                    found = (list(r_choice), list(p_choice))
+                    break
+            if found:
+                break
+        if found:
+            react_coeffs, prod_coeffs = found
+        else:
+            # No valid all-positive integer solution found in the small search — treat as unbalanced
+            return None
     # Проверка: никакая сторона не должна быть весь нулевой
     if all(c == 0 for c in react_coeffs) or all(c == 0 for c in prod_coeffs):
         return None
@@ -362,6 +417,11 @@ class ReactionVariant:
 
 def is_acid(formula: str) -> bool:
     # простая эвристика: начинается с H и не является H2O
+    if not formula or not isinstance(formula, str):
+        return False
+    # Exclude peroxides like H2O2 which start with H but are not typical acids
+    if formula.startswith("H2O2") or (formula.startswith('H') and 'O2' in formula):
+        return False
     return formula.startswith("H") and formula != "H2O"
 
 
@@ -377,6 +437,69 @@ def metal_from_formula(formula: str) -> Optional[str]:
         el = m.group(1)
         if el in METAL_ACTIVITY:
             return el
+    return None
+
+
+def decomposition_variant(reactants: List[str]) -> Optional[ReactionVariant]:
+    # handle common decomposition patterns
+    if len(reactants) != 1:
+        return None
+    R = reactants[0]
+    # CaCO3 -> CaO + CO2
+    if R == 'CaCO3':
+        products = ['CaO', 'CO2']
+        steps = f"Термическое разложение: {R} -> CaO + CO2"
+        balanced = balance_equation([R], products)
+        return ReactionVariant('decomposition', [R], products, balanced, steps)
+    # H2O2 -> H2O + O2
+    if R == 'H2O2':
+        products = ['H2O', 'O2']
+        steps = f"Каталитическое разложение: 2 H2O2 -> 2 H2O + O2"
+        balanced = balance_equation([R], products)
+        return ReactionVariant('decomposition', [R], products, balanced, steps)
+    # AgCl -> Ag + Cl2 (photochemical)
+    if R == 'AgCl':
+        products = ['Ag', 'Cl2']
+        steps = f"Фотохимическое разложение: 2 AgCl -> 2 Ag + Cl2"
+        balanced = balance_equation([R], products)
+        return ReactionVariant('decomposition', [R], products, balanced, steps)
+    # Electrolytic water splitting (as decomposition) when explicitly requested
+    if R == 'H2O':
+        products = ['H2', 'O2']
+        steps = f"Электролитическое разложение (при электролизе): 2 H2O -> 2 H2 + O2"
+        balanced = balance_equation([R], products)
+        return ReactionVariant('decomposition', [R], products, balanced, steps)
+    return None
+
+
+def complex_formation_variant(reactants: List[str]) -> Optional[ReactionVariant]:
+    # simple detection: Cu2+ + NH3 -> [Cu(NH3)x]2+
+    # support: reactants may include ion-like strings 'Cu2+' or molecular 'CuSO4' + NH3
+    # If explicit ion provided
+    for r in reactants:
+        if re.match(r"^[A-Z][a-z]?\d*\+", r):
+            # find ammonia count (look for separate NH3 molecules or numeric coefficient)
+            nh3_count = sum(1 for x in reactants if x == 'NH3')
+            if nh3_count > 0:
+                cation = re.match(r"^([A-Z][a-z]?)(\d*)\+", r).group(1)
+                charge_m = re.match(r"^[A-Z][a-z]?(\d*)\+", r).group(1)
+                charge = int(charge_m) if charge_m else 1
+                product = f"[{cation}(NH3){nh3_count}]" + (f"{charge}+" if charge != 1 else "")
+                steps = f"Комплексообразование: {' + '.join(reactants)} -> {product}"
+                balanced = balance_equation(reactants, [product])
+                return ReactionVariant('complex_formation', reactants, [product], balanced, steps)
+    # fallback: if metal salt and excess NH3 -> complex
+    if any(r == 'NH3' for r in reactants):
+        for r in reactants:
+            if r.endswith('SO4') or r.endswith('Cl') or r.endswith('NO3'):
+                m = re.match(r"^([A-Z][a-z]?)", r)
+                if m:
+                    metal = m.group(1)
+                    nh3_count = sum(1 for x in reactants if x == 'NH3')
+                    product = f"[{metal}(NH3){nh3_count}]"
+                    steps = f"Комплексообразование (эвристика): {' + '.join(reactants)} -> {product}"
+                    balanced = balance_equation(reactants, [product])
+                    return ReactionVariant('complex_formation', reactants, [product], balanced, steps)
     return None
 
 
@@ -602,124 +725,135 @@ def oxidation_reduction_variant(reactants: List[str]) -> Optional[ReactionVarian
 
     Пример: Cl2 + 2 NaOH -> NaCl + NaClO + H2O
     """
-    if len(reactants) != 2:
+    if len(reactants) < 2:
         return None
-    A, B = reactants
-    # опознаём диатомный галоген
+
+    # try to detect a diatomic halogen among any reactants (Cl2, Br2, I2)
     hal_match = None
     for hal in ('Cl','Br','I'):
-        if A == f"{hal}2":
-            hal_match = (hal, A, B); break
-        if B == f"{hal}2":
-            hal_match = (hal, B, A); break
-    if not hal_match:
-        return None
-    hal, hal_formula, other = hal_match
-    # требуем щёлочь/основание
-    if not is_base(other):
-        return None
-    # найдём катион в основании (Na в NaOH)
-    cat = metal_from_formula(other) or None
-    if cat is None:
-        # попытка для NH4OH
-        if other.startswith('NH4'):
-            cat = 'NH4'
-        else:
-            return None
+        for r in reactants:
+            if r == f"{hal}2":
+                # pick another reagent as "other" (first different one)
+                others = [x for x in reactants if x != r]
+                other = others[0] if others else None
+                hal_match = (hal, r, other)
+                break
+        if hal_match:
+            break
 
-    # We'll produce two plausible variants:
+    cat = None
+    if hal_match:
+        hal, hal_formula, other = hal_match
+        # require a base/alkali for halogen disproportionation
+        if not other or not is_base(other):
+            hal_match = None
+        else:
+            cat = metal_from_formula(other) or None
+            if cat is None:
+                if other.startswith('NH4'):
+                    cat = 'NH4'
+                else:
+                    hal_match = None
+
+    # We'll produce two plausible variants for halogen disproportionation if detected
     # 1) cold/dilute -> hypohalite (ClO-): Cl2 + 2 NaOH -> NaCl + NaClO + H2O
     # 2) hot/concentrated -> chlorate (ClO3-): 3 Cl2 + 6 NaOH -> 5 NaCl + NaClO3 + 3 H2O
 
-    halide = f"{cat}{hal}"
-    hypohalite = f"{cat}{hal}O"
-    products1 = [halide, hypohalite, 'H2O']
-    steps1 = f"Redox disproportionation (cold/dilute): {hal_formula} + {other} -> {halide} + {hypohalite} + H2O"
-    balanced1 = balance_equation([A, B], products1)
-
-    # chlorate variant
-    chlorate = f"{cat}{hal}O3"
-    products2 = [halide, chlorate, 'H2O']
-    steps2 = f"Redox disproportionation (hot/concentrated): {hal_formula} + {other} -> {halide} + {chlorate} + H2O"
-    balanced2 = balance_equation([A, B], products2)
-
     variants: List[ReactionVariant] = []
-    if balanced1 is not None:
-        variants.append(ReactionVariant('oxidation_reduction', [A, B], products1, balanced1, steps1))
-    if balanced2 is not None:
-        variants.append(ReactionVariant('oxidation_reduction', [A, B], products2, balanced2, steps2))
+    if hal_match:
+        halide = f"{cat}{hal}"
+        hypohalite = f"{cat}{hal}O"
+        products1 = [halide, hypohalite, 'H2O']
+        steps1 = f"Redox disproportionation (cold/dilute): {hal_formula} + {other} -> {halide} + {hypohalite} + H2O"
+        balanced1 = balance_equation(reactants, products1)
+
+        # chlorate variant
+        chlorate = f"{cat}{hal}O3"
+        products2 = [halide, chlorate, 'H2O']
+        steps2 = f"Redox disproportionation (hot/concentrated): {hal_formula} + {other} -> {halide} + {chlorate} + H2O"
+        balanced2 = balance_equation(reactants, products2)
+
+        if balanced1 is not None:
+            variants.append(ReactionVariant('oxidation_reduction', reactants, products1, balanced1, steps1))
+        if balanced2 is not None:
+            variants.append(ReactionVariant('oxidation_reduction', reactants, products2, balanced2, steps2))
+
+    # Also attempt more general redox handling for common oxidizers/reducers
+    # (permanganate/dichromate with peroxide, etc.)
+    try:
+        # helper to detect acidic/base environment
+        def detect_medium(reacts: List[str]) -> str:
+            if any(is_base(r) for r in reacts) or any('OH' in r for r in reacts):
+                return 'basic'
+            if any(is_acid(r) for r in reacts):
+                return 'acidic'
+            return 'neutral'
+
+        medium = detect_medium(reactants)
+
+        # General: permanganate + peroxide
+        if any("MnO4" in r for r in reactants) and any("H2O2" in r for r in reactants):
+            mn = next(r for r in reactants if "MnO4" in r)
+            per = 'H2O2'
+            cat = metal_from_formula(mn) or (re.match(r"^([A-Z][a-z]?)", mn).group(1) if re.match(r"^([A-Z][a-z]?)", mn) else 'K')
+            acidic_present = medium == 'acidic'
+            # acidic variant: Mn2+ (as salt with available acid anion if present) + O2 + H2O
+            acid_anion = None
+            for r in reactants:
+                if is_acid(r):
+                    m = re.match(r"^H(\d*)(.*)$", r)
+                    acid_anion = m.group(2) if m else None
+            if acidic_present and acid_anion:
+                # form Mn salt with that anion (e.g., MnSO4) and include spectator cation salt (e.g., K2SO4)
+                mn_salt = f"Mn{acid_anion}"
+                cat_salt = f"{cat}{acid_anion}"
+                products_acid = ['O2', mn_salt, cat_salt, 'H2O']
+                steps_acid = f"Redox (acidic): {mn} + {per} -> O2 + {mn_salt} + {cat_salt} + H2O"
+                b_acid = balance_equation(reactants, products_acid)
+                if b_acid is not None:
+                    variants.append(ReactionVariant('oxidation_reduction', reactants, products_acid, b_acid, steps_acid))
+            # neutral/basic variant: MnO2 (s), O2, metal hydroxide, water
+            hydroxide = f"{cat}OH"
+            products_neutral = ['O2', 'MnO2', hydroxide, 'H2O']
+            steps_neutral = f"Redox (neutral/basic): {mn} + {per} -> O2 + MnO2 + {hydroxide} + H2O"
+            b_neu = balance_equation(reactants, products_neutral)
+            if b_neu is not None:
+                variants.append(ReactionVariant('oxidation_reduction', reactants, products_neutral, b_neu, steps_neutral))
+
+        # Dichromate + peroxide (similar pattern)
+        if any("Cr2O7" in r for r in reactants) and any("H2O2" in r for r in reactants):
+            cr = next(r for r in reactants if "Cr2O7" in r)
+            per = 'H2O2'
+            cat = metal_from_formula(cr) or (re.match(r"^([A-Z][a-z]?)", cr).group(1) if re.match(r"^([A-Z][a-z]?)", cr) else 'K')
+            # acidic: Cr3+ salt if acid anion present
+            acid_anion = None
+            for r in reactants:
+                if is_acid(r):
+                    m = re.match(r"^H(\d*)(.*)$", r)
+                    acid_anion = m.group(2) if m else None
+            if acid_anion:
+                cr_salt = f"Cr{acid_anion}"
+                cat_salt = f"{cat}{acid_anion}"
+                products_acid = ['O2', cr_salt, cat_salt, 'H2O']
+                steps_acid = f"Redox (acidic): {cr} + {per} -> O2 + {cr_salt} + {cat_salt} + H2O"
+                b_acid = balance_equation(reactants, products_acid)
+                if b_acid is not None:
+                    variants.append(ReactionVariant('oxidation_reduction', reactants, products_acid, b_acid, steps_acid))
+            # neutral/basic: Cr2O3 + O2 + metal hydroxide + H2O (approx)
+            hydroxide = f"{cat}OH"
+            products_neu = ['O2', 'Cr2O3', hydroxide, 'H2O']
+            steps_neu = f"Redox (neutral/basic): {cr} + {per} -> O2 + Cr2O3 + {hydroxide} + H2O"
+            b_neu = balance_equation(reactants, products_neu)
+            if b_neu is not None:
+                variants.append(ReactionVariant('oxidation_reduction', reactants, products_neu, b_neu, steps_neu))
+    except Exception:
+        pass
 
     # Return list of variants (generate_reactions will handle list return)
     return variants
 
 
-def decomposition_variant(reactants: List[str]) -> Optional[ReactionVariant]:
-    # handle common decomposition patterns
-    if len(reactants) != 1:
-        return None
-    R = reactants[0]
-    # CaCO3 -> CaO + CO2
-    if R == 'CaCO3':
-        products = ['CaO', 'CO2']
-        steps = f"Термическое разложение: {R} -> CaO + CO2"
-        balanced = balance_equation([R], products)
-        return ReactionVariant('decomposition', [R], products, balanced, steps)
-    # H2O2 -> H2O + O2
-    if R == 'H2O2':
-        products = ['H2O', 'O2']
-        steps = f"Каталитическое разложение: 2 H2O2 -> 2 H2O + O2"
-        balanced = balance_equation([R], products)
-        return ReactionVariant('decomposition', [R], products, balanced, steps)
-    # AgCl -> Ag + Cl2 (photochemical)
-    if R == 'AgCl':
-        products = ['Ag', 'Cl2']
-        steps = f"Фотохимическое разложение: 2 AgCl -> 2 Ag + Cl2"
-        balanced = balance_equation([R], products)
-        return ReactionVariant('decomposition', [R], products, balanced, steps)
-    # Electrolytic water splitting (as decomposition) when explicitly requested
-    if R == 'H2O':
-        products = ['H2', 'O2']
-        steps = f"Электролитическое разложение (при электролизе): 2 H2O -> 2 H2 + O2"
-        balanced = balance_equation([R], products)
-        return ReactionVariant('decomposition', [R], products, balanced, steps)
-    return None
-
-
-def complex_formation_variant(reactants: List[str]) -> Optional[ReactionVariant]:
-    # simple detection: Cu2+ + NH3 -> [Cu(NH3)x]2+
-    # support: reactants may include ion-like strings 'Cu2+' or molecular 'CuSO4' + NH3
-    # If explicit ion provided
-    for r in reactants:
-        if re.match(r"^[A-Z][a-z]?\d*\+", r):
-            # find ammonia count (look for separate NH3 molecules or numeric coefficient)
-            nh3_count = sum(1 for x in reactants if x == 'NH3')
-            if nh3_count > 0:
-                cation = re.match(r"^([A-Z][a-z]?)(\d*)\+", r).group(1)
-                charge = re.match(r"^[A-Z][a-z]?(\d*)\+", r).group(1)
-                charge = int(charge) if charge else 1
-                product = f"[{cation}(NH3){nh3_count}]{'' if charge==1 else str(charge)+'+'}"
-                steps = f"Комплексообразование: {' + '.join(reactants)} -> {product}"
-                balanced = balance_equation(reactants, [product])
-                return ReactionVariant('complex_formation', reactants, [product], balanced, steps)
-    # fallback: if metal salt and excess NH3 -> complex
-    if any(r == 'NH3' for r in reactants):
-        for r in reactants:
-            if r.endswith('SO4') or r.endswith('Cl') or r.endswith('NO3'):
-                m = re.match(r"^([A-Z][a-z]?)", r)
-                if m:
-                    metal = m.group(1)
-                    nh3_count = sum(1 for x in reactants if x == 'NH3')
-                    product = f"[{metal}(NH3){nh3_count}]"
-                    steps = f"Комплексообразование (эвристика): {' + '.join(reactants)} -> {product}"
-                    balanced = balance_equation(reactants, [product])
-                    return ReactionVariant('complex_formation', reactants, [product], balanced, steps)
-    return None
-
-
 def single_replacement_variant(reactants: List[str]) -> Optional[ReactionVariant]:
-    # A + BC -> AC + B если A более активен чем B
-    if len(reactants) != 2:
-        return None
     A, BC = reactants
     # разрешаем замену только если A — простая формула/молекула (например 'Zn', 'Fe', 'Cl2', 'CH4')
     if not re.fullmatch(r"[A-Z][A-Za-z0-9()]*", A):
@@ -895,22 +1029,26 @@ def generate_reactions(reactants: List[str]) -> List[Dict]:
         variants.append(cmb)
     # Окислительно-восстановительные диспропорционирования (галогены в щёлочи и т.п.)
     red = oxidation_reduction_variant(reactants)
+    red_found = False
     if red:
         # oxidation_reduction_variant may return a single ReactionVariant or a list
         if isinstance(red, list):
             variants.extend(red)
+            red_found = len(red) > 0
         else:
             variants.append(red)
+            red_found = True
     # специальный случай: разложение угольной кислоты H2CO3 -> CO2 + H2O
     if any(r == 'H2CO3' for r in reactants):
         # разложение без основания
         steps = "Разложение H2CO3: H2CO3 -> CO2 + H2O"
         b = balance_equation(['H2CO3'], ['CO2', 'H2O'])
         variants.append(ReactionVariant('carbonic_decomposition', ['H2CO3'], ['CO2', 'H2O'], b, steps))
-    # Двойной обмен (для двух соединений)
-    d = double_displacement_variant(reactants)
-    if d:
-        variants.append(d)
+    # Двойной обмен (для двух соединений) — пропускаем, если уже найден редокс
+    if not red_found:
+        d = double_displacement_variant(reactants)
+        if d:
+            variants.append(d)
     # Разложение (термическое/каталитическое и т.д.)
     dec = decomposition_variant(reactants)
     if dec:
@@ -919,10 +1057,11 @@ def generate_reactions(reactants: List[str]) -> List[Dict]:
     comp = complex_formation_variant(reactants)
     if comp:
         variants.append(comp)
-    # Замещение
-    s = single_replacement_variant(reactants)
-    if s:
-        variants.append(s)
+    # Замещение — применимо только для двух реагентов; пропускаем, если уже найден редокс
+    if not red_found and len(reactants) == 2:
+        s = single_replacement_variant(reactants)
+        if s:
+            variants.append(s)
     # Горение
     c = combustion_variant(reactants)
     if c:
@@ -931,6 +1070,27 @@ def generate_reactions(reactants: List[str]) -> List[Dict]:
     # Преобразуем в словари
     out = []
     for v in variants:
+        # Basic validation: require a balanced integer solution with all-positive coefficients
+        b = v.balanced
+        if b is None:
+            # skip unbalanced/undetermined variants here (they may be noisy)
+            continue
+        r_coeffs, p_coeffs = b
+        if any(c <= 0 for c in r_coeffs) or any(c <= 0 for c in p_coeffs):
+            continue
+        # validate product formulas look plausible
+        valid_prods = True
+        for p in v.products:
+            if not _is_valid_formula(p):
+                valid_prods = False; break
+            try:
+                parsed_p = parse_formula(p)
+                if not parsed_p:
+                    valid_prods = False; break
+            except Exception:
+                valid_prods = False; break
+        if not valid_prods:
+            continue
         out.append({
             "type": v.type,
             "reactants": v.reactants,
