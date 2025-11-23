@@ -20,6 +20,18 @@ from pathlib import Path
 from typing import Set, List, Dict, Optional
 from enum import Enum
 
+__all__ = [
+    "PermRole",
+    "has_perm",
+    "get_user_roles",
+    "add_perm",
+    "remove_perm",
+    "init_perms",
+    "can_manage_role",
+    "get_hierarchy_level",
+    "get_role_description",
+    "INDEPENDENT_ROLES"
+]
 # Путь к файлу с правами
 PERMS_FILE = Path(__file__).parent / "perms_data.json"
 

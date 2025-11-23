@@ -23,7 +23,7 @@ from playwright.async_api import async_playwright
 
 # Импорт системы управления правами
 sys.path.insert(0, str(Path(__file__).parent / "configs_folder"))
-from configs_folder.perms_manager import PermRole, has_perm, get_user_roles, add_perm, remove_perm, init_perms, can_manage_role, get_hierarchy_level, get_role_description, INDEPENDENT_ROLES
+import configs_folder.perms_manager as perms_manager
 
 # ------------------ main vars setup ------------------
 SCRIPT_DIR = Path(__file__).parent
@@ -104,7 +104,7 @@ COUNTER_TOLERANCE = 0.4  # допустимое отклонение у counting
 OWNER_ID = 727105264486187090
 
 # Инициализация системы прав
-init_perms(OWNER_ID)
+perms_manager.init_perms(OWNER_ID)
 
 # ------------------ sounds setup ------------------
 
@@ -138,7 +138,7 @@ class SoundSelect(Select):
 
     async def callback(self, interaction: discord.Interaction):
         # защита: только инициатор может выбрать или пользователь с правом SOUNDPAD
-        if interaction.user.id != self.author_id or not has_perm(interaction.user.id, PermRole.SOUNDPAD):
+        if interaction.user.id != self.author_id or not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.SOUNDPAD):
             await interaction.response.send_message(f"<@{interaction.user.id}>, Только инициатор может выбрать звук.", ephemeral=False)
             return
         # проверки
@@ -698,7 +698,7 @@ def mainbotstart():
     @bot.command(name="disablecmds")
     async def disablecmds(ctx: commands.Context):
         # проверка прав: нужна роль OWNER
-        if not has_perm(ctx.author.id, PermRole.OWNER):
+        if not perms_manager.has_perm(ctx.author.id, perms_manager.PermRole.OWNER):
             await ctx.send("У вас нет прав для этой команды.")
             return
 
@@ -711,7 +711,7 @@ def mainbotstart():
 
     @bot.command(name="synccmds")
     async def synccmds(ctx: commands.Context):
-        if not has_perm(ctx.author.id, PermRole.OWNER):
+        if not perms_manager.has_perm(ctx.author.id, perms_manager.PermRole.OWNER):
             await ctx.send("У вас нет прав для этой команды.")
             return
 
@@ -727,7 +727,7 @@ def mainbotstart():
 
     @bot.command(name="shutdownbot")
     async def shutdown_cmd(ctx: commands.Context):
-        if not has_perm(ctx.author.id, PermRole.HOST):
+        if not perms_manager.has_perm(ctx.author.id, perms_manager.PermRole.HOST):
             await ctx.send("У вас нет прав для этой команды.")
             return
         await ctx.send("Loading...")
@@ -754,7 +754,7 @@ def mainbotstart():
 
     @bot.command(name="restartbot")
     async def restart_prefix(ctx: commands.Context, channel_id: Optional[int] = None):
-        if not has_perm(ctx.author.id, PermRole.HOST):
+        if not perms_manager.has_perm(ctx.author.id, perms_manager.PermRole.HOST):
             await ctx.send("У вас нет прав для этой команды.")
             return
 
@@ -767,7 +767,7 @@ def mainbotstart():
 
     @bot.command(name="quickrestartbot")
     async def restart_prefix(ctx: commands.Context, channel_id: Optional[int] = None):
-        if not has_perm(ctx.author.id, PermRole.HOST):
+        if not perms_manager.has_perm(ctx.author.id, perms_manager.PermRole.HOST):
             await ctx.send("У вас нет прав для этой команды.")
             return
 
@@ -783,7 +783,7 @@ def mainbotstart():
     # ----------------------------
     @bot.tree.command(name="myperms", description="Показать права бота на сервере")
     async def myperms(interaction: discord.Interaction):
-        if not has_perm(interaction.user.id, PermRole.OWNER):
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logging.debug(f"{interaction.user.name} try use myperms")
             return
@@ -807,7 +807,7 @@ def mainbotstart():
     @bot.tree.command(name="roles", description="Показать роли участника и их ID")
     async def roles(interaction: discord.Interaction, member: discord.Member | None = None):
 
-        if not has_perm(interaction.user.id, PermRole.OWNER):
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logging.debug(f"{interaction.user.name} try use roles")
             return
@@ -848,12 +848,12 @@ def mainbotstart():
             await interaction.response.send_message("Не удалось получить ID пользователя.", ephemeral=True)
             return
 
-        roles = get_user_roles(user_id)
+        roles = perms_manager.get_user_roles(user_id)
         if not roles:
             await interaction.response.send_message(f"У {target.mention} нет назначенных прав.", ephemeral=True)
             return
 
-        lines = [f"• {r.value} — {get_role_description(r)}" for r in sorted(roles, key=lambda x: x.value)]
+        lines = [f"• {r.value} — {perms_manager.get_role_description(r)}" for r in sorted(roles, key=lambda x: x.value)]
         await interaction.response.send_message(f"Права {target.mention}:\n```\n" + "\n".join(lines) + "\n```", ephemeral=True)
 
     # ----------------------------
@@ -864,7 +864,7 @@ def mainbotstart():
         current: str,
     ) -> list[discord.app_commands.Choice[str]]:
         """Автодополнение для списка доступных независимых ролей."""
-        roles = [r.value for r in INDEPENDENT_ROLES]
+        roles = [r.value for r in perms_manager.INDEPENDENT_ROLES]
         # Фильтруем по введённому тексту
         choices = [
             discord.app_commands.Choice(
@@ -893,18 +893,18 @@ def mainbotstart():
         target_id = int(member.id)
 
         # проверка прав инициатора
-        if not has_perm(manager_id, PermRole.PERMSMANAGER):
+        if not perms_manager.has_perm(manager_id, perms_manager.PermRole.PERMSMANAGER):
             await interaction.response.send_message("У вас нет прав на изменение прав пользователей.", ephemeral=True)
             return
         # Представляем пользователю Select с доступными ролями
         class RoleSelect(discord.ui.Select):
             def __init__(self, manager_id: int, target_id: int, set_flag: bool):
                 options = []
-                for r in PermRole:
+                for r in perms_manager.PermRole:
                     # не показываем защищённые роли в списке
-                    if r in (PermRole.OWNER, PermRole.HOST, PermRole.PERMSMANAGER):
+                    if r in (perms_manager.PermRole.OWNER, perms_manager.PermRole.HOST, perms_manager.PermRole.PERMSMANAGER):
                         continue
-                    options.append(discord.SelectOption(label=r.value.upper(), value=r.value, description=get_role_description(r)))
+                    options.append(discord.SelectOption(label=r.value.upper(), value=r.value, description=perms_manager.get_role_description(r)))
 
                 super().__init__(placeholder="Выберите роль...", min_values=1, max_values=1, options=options)
                 self.manager_id = manager_id
@@ -914,24 +914,24 @@ def mainbotstart():
             async def callback(self, interaction: discord.Interaction):
                 role_value = self.values[0]
                 try:
-                    role_enum = PermRole(role_value)
+                    role_enum = perms_manager.PermRole(role_value)
                 except ValueError:
                     await interaction.response.send_message(f"Неизвестная роль `{role_value}`.", ephemeral=True)
                     return
 
-                ok, msg = can_manage_role(self.manager_id, self.target_id, role_enum)
+                ok, msg = perms_manager.can_manage_role(self.manager_id, self.target_id, role_enum)
                 if not ok:
                     await interaction.response.send_message(msg, ephemeral=True)
                     return
 
                 if self.set_flag:
-                    added = add_perm(self.target_id, role_enum)
+                    added = perms_manager.add_perm(self.target_id, role_enum)
                     if added:
                         await interaction.response.send_message(f"✅ Роль `{role_enum.value}` добавлена пользователю <@{self.target_id}>.", ephemeral=True)
                     else:
                         await interaction.response.send_message(f"⚠️ У пользователя уже есть роль `{role_enum.value}`.", ephemeral=True)
                 else:
-                    removed = remove_perm(self.target_id, role_enum)
+                    removed = perms_manager.remove_perm(self.target_id, role_enum)
                     if removed:
                         await interaction.response.send_message(f"✅ Роль `{role_enum.value}` удалена у <@{self.target_id}>.", ephemeral=True)
                     else:
@@ -950,7 +950,7 @@ def mainbotstart():
             await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=True)
             return
         
-        if not has_perm(interaction.user.id, PermRole.OWNER):
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logging.debug(f"{interaction.user.name} try use toggle_role")
             return
@@ -1002,7 +1002,7 @@ def mainbotstart():
             await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
             return
         
-        if not has_perm(interaction.user.id, PermRole.OWNER):
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logging.debug(f"{interaction.user.name} try use say")
             return
@@ -1079,7 +1079,7 @@ def mainbotstart():
     # --- Команды управления счётчиком ---
     @bot.tree.command(name="set_counter", description="Установить канал для счётчика (owner only).")
     async def set_counter(interaction: discord.Interaction, channel: discord.TextChannel | None = None, start_value : int | None = None):
-        if not has_perm(interaction.user.id, PermRole.OWNER):
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас нет прав для этой команды.", ephemeral=True)
             return
         start_value = start_value or 1
@@ -1094,7 +1094,7 @@ def mainbotstart():
 
     @bot.tree.command(name="unset_counter", description="Отключить канал счётчика (owner only).")
     async def unset_counter(interaction: discord.Interaction):
-        if not has_perm(interaction.user.id, PermRole.OWNER):
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас нет прав для этой команды.", ephemeral=True)
             return
 
@@ -1169,7 +1169,7 @@ def mainbotstart():
             await interaction.followup.send("Эта команда работает только на сервере.", ephemeral=False)
             return
         
-        if not has_perm(interaction.user.id, PermRole.OWNER):
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.followup.send("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logging.debug(f"{interaction.user.name} try use askgpt")
             return
@@ -1185,7 +1185,7 @@ def mainbotstart():
             await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
             return
         
-        if not has_perm(interaction.user.id, PermRole.SOUNDPAD):
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.SOUNDPAD):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=False)
             logging.debug(f"{interaction.user.name} try use stopsound")
             return
@@ -1211,7 +1211,7 @@ def mainbotstart():
             await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
             return
         
-        if not has_perm(interaction.user.id, PermRole.LEAVE):
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.LEAVE):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=False)
             logging.debug(f"{interaction.user.name} try use leave")
             return
@@ -1239,7 +1239,7 @@ def mainbotstart():
             await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
             return
         
-        if not has_perm(interaction.user.id, PermRole.OWNER):
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logging.debug(f"{interaction.user.name} try use demute")
             return
@@ -1274,7 +1274,7 @@ def mainbotstart():
             await interaction.followup.send("Эта команда работает только на сервере.", ephemeral=False)
             return
         
-        if not has_perm(interaction.user.id, PermRole.JOIN):
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.JOIN):
             await interaction.followup.send("У вас недостаточно прав использовать эту команду!.", ephemeral=False)
             logging.debug(f"{interaction.user.name} try use join")
             return
@@ -1303,7 +1303,7 @@ def mainbotstart():
             await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
             return
         
-        if not has_perm(interaction.user.id, PermRole.SOUNDPAD):
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.SOUNDPAD):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logging.debug(f"{interaction.user.name} try use soundpanel ({interaction.user.id})")
             return
@@ -1435,7 +1435,7 @@ def mainbotstart():
             await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
             return
         
-        if not has_perm(interaction.user.id, PermRole.OWNER):
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=False)
             logging.debug(f"{interaction.user.name} try use set_new_member_channel")
             return
