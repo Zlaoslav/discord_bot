@@ -23,7 +23,6 @@ from playwright.async_api import async_playwright
 
 
 import configs_folder.perms_manager as perms_manager
-import chem_reactions 
 
 
 # ------------------ main vars setup ------------------
@@ -1454,6 +1453,7 @@ def mainbotstart():
     @bot.tree.command(name="chemical_reactions", description="Анализ и генерация возможных уравнений реакции по списку реагентов (owner only)")
     async def chemical_reactions(interaction: discord.Interaction, reactants: str):
         try:
+            import chem_reactions 
             await interaction.response.defer(ephemeral=False)
 
 
