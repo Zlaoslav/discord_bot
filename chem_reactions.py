@@ -239,6 +239,144 @@ def parse_formula(formula: str) -> Dict[str, int]:
     return counts
 
 
+def _parse_charge_suffix(formula: str) -> Tuple[str, int]:
+    """Возвращает (формула_без_заряда, суммарный_заряд).
+
+    Поддерживает суффиксы типа '2+', '+', '3-' и т.п.
+    Если заряд не указан, возвращает 0.
+    """
+    if not formula or not isinstance(formula, str):
+        return formula, 0
+    m = re.search(r"(\d*[+-])$", formula)
+    if not m:
+        return formula, 0
+    s = m.group(1)
+    base = formula[:m.start()]
+    if s in ('+', '-'):
+        val = 1 if s == '+' else -1
+    else:
+        num = int(s[:-1]) if s[:-1].isdigit() else 1
+        val = num if s[-1] == '+' else -num
+    return base, val
+
+
+def compute_oxidation_states(formula: str) -> Dict[str, int]:
+    """Попытка вычислить формальные степени окисления для всех элементов в формуле.
+
+    Возвращает словарь {element: oxidation_state} с целыми значениями, где возможно.
+    Это эвристическая реализация, достаточная для генерации кандидатов полуреакций.
+    """
+    base, net_charge = _parse_charge_suffix(formula)
+    parsed = parse_formula(base)
+    typical = {'H': 1, 'O': -2, 'F': -1, 'Cl': -1, 'Br': -1, 'I': -1}
+
+    def assumed_oxi(el: str) -> Optional[int]:
+        if el in typical:
+            return typical[el]
+        if el in METAL_COMMON_CHARGES:
+            return METAL_COMMON_CHARGES[el]
+        if el == 'S':
+            return -2
+        if el == 'N':
+            return -3
+        return None
+
+    results: Dict[str, int] = {}
+    elems = list(parsed.keys())
+    for target in elems:
+        ct_target = parsed.get(target, 1)
+        sum_others = net_charge
+        unknowns = []
+        for el, cnt in parsed.items():
+            if el == target:
+                continue
+            a = assumed_oxi(el)
+            if a is None:
+                unknowns.append((el, cnt))
+            else:
+                sum_others += a * cnt
+
+        if not unknowns:
+            ox = -sum_others / ct_target
+            if float(ox).is_integer():
+                results[target] = int(ox)
+            else:
+                results[target] = int(Fraction(ox).limit_denominator())
+        else:
+            contrib = 0
+            unresolved = False
+            for el_u, cnt_u in unknowns:
+                a2 = assumed_oxi(el_u)
+                if a2 is None:
+                    unresolved = True
+                    break
+                contrib += a2 * cnt_u
+            if not unresolved:
+                sum_others += contrib
+                ox = -sum_others / ct_target
+                if float(ox).is_integer():
+                    results[target] = int(ox)
+                else:
+                    results[target] = int(Fraction(ox).limit_denominator())
+            else:
+                results[target] = 0
+    return results
+
+
+def generate_half_reaction_candidates(reactants: List[str]) -> List[Tuple[List[str], List[str], str]]:
+    """Генерирует кандидатов полуреакций: (lhs_list, rhs_list, description).
+
+    Эвристические шаблоны покрывают распространённые случаи: перманганат, дихромат,
+    перекись водорода, галогены, распространённые металлы.
+    """
+    candidates: List[Tuple[List[str], List[str], str]] = []
+    medium = detect_medium(reactants)
+
+    def add(lhs, rhs, desc):
+        candidates.append((lhs if isinstance(lhs, list) else [lhs], rhs if isinstance(rhs, list) else [rhs], desc))
+
+    for r in reactants:
+        # permanganate
+        if 'MnO4' in r:
+            if medium == 'acidic':
+                add(r, 'Mn2+', 'Permanganate reduced to Mn2+ (acidic)')
+            else:
+                add(r, 'MnO2', 'Permanganate reduced to MnO2 (neutral/basic)')
+
+        # dichromate
+        if 'Cr2O7' in r or 'Cr2O7' in r:
+            if medium == 'acidic':
+                add(r, 'Cr3+', 'Dichromate reduced to Cr3+ (acidic)')
+            else:
+                add(r, 'Cr2O3', 'Dichromate reduced to Cr2O3 (neutral/basic)')
+
+        # peroxide
+        if 'H2O2' in r:
+            add('H2O2', 'O2', 'Peroxide -> O2 (oxidation half)')
+            add('H2O2', 'H2O', 'Peroxide -> H2O (reduction half)')
+
+        # halogens
+        if re.fullmatch(r'(Cl|Br|I)2', r) or r in ('Cl2','Br2','I2'):
+            hal = r[:-1] if r.endswith('2') else r
+            add(r, hal + '-', f'{r} reduced to {hal}- (halide)')
+            if medium in ('basic', 'neutral'):
+                add(r, hal + 'O', f'{r} oxidized to hypohalite {hal}O (neutral/basic)')
+
+        # metal atoms or metal salts
+        m = metal_from_formula(r)
+        if m:
+            common = METAL_COMMON_CHARGES.get(m)
+            # oxidation 2+ -> 3+
+            if common == 2:
+                add(r, f"{m}3+", f"{m}2+ -> {m}3+ (common oxidation)")
+            # elemental metal -> cation
+            if re.fullmatch(rf"{m}", r):
+                ch = METAL_COMMON_CHARGES.get(m, 2)
+                add(r, f"{m}{ch}+" if ch>1 else f"{m}+", f"Elemental {m} -> {m}{ch}+ (salt formation)")
+
+    return candidates
+
+
 ### Балансировка уравнений (матрица элементов × соединения)
 def balance_equation(reactants: List[str], products: List[str]) -> Optional[Tuple[List[int], List[int]]]:
     """Балансирует уравнение. Возвращает кортеж списков коэффициентов (reactants, products) или None.
@@ -405,6 +543,466 @@ def balance_equation(reactants: List[str], products: List[str]) -> Optional[Tupl
     return react_coeffs, prod_coeffs
 
 
+def _charge_of_species(species: str) -> int:
+    """Return an estimated integer charge for some common ionic species.
+
+    This is a heuristic: returns +1 for 'H+', -1 for 'OH-' or 'e', and 0 for most neutral molecules.
+    """
+    if not species or not isinstance(species, str):
+        return 0
+    if species == 'H+':
+        return 1
+    if species == 'OH-' or species == 'OH':
+        return -1 if species.endswith('-') else 0
+    if species == 'e':
+        return -1
+    # simple detection for explicit +/- in formula (e.g., Cl- or Na+)
+    # support trailing numeric charge like 'Mn2+' or 'SO4 2-'
+    m = re.match(r"^(.+?)(\d+)?([+-])$", species)
+    if m:
+        mag = int(m.group(2)) if m.group(2) else 1
+        sign = m.group(3)
+        return mag if sign == '+' else -mag
+    # fallback: try ANION_CHARGES for known anions (negative)
+    key = species.strip('()')
+    if key in ANION_CHARGES:
+        return -ANION_CHARGES.get(key, 0)
+    # known simple cations
+    if species in METAL_COMMON_CHARGES:
+        return METAL_COMMON_CHARGES.get(species, 0)
+    return 0
+
+
+def balance_with_aux(reactants: List[str], products: List[str], medium: str = 'neutral') -> Optional[Tuple[List[int], List[int]]]:
+    """Balance equation allowing auxiliary species H2O, H+, OH- and electrons.
+
+    medium: 'acidic'|'basic'|'neutral' influences which auxiliary species are allowed.
+    Returns (react_coeffs, prod_coeffs) or None.
+    """
+    from fractions import Fraction
+    # build set of elements
+    comps = list(reactants) + list(products)
+    # allowed auxiliaries (we include left and right copies so solver can place them on either side)
+    base_aux = []
+    if medium == 'acidic':
+        base_aux = ['H2O', 'H+']
+    elif medium == 'basic':
+        base_aux = ['H2O', 'OH-']
+    else:
+        # neutral: allow both H2O and OH- to give flexibility for neutral/basic balances
+        base_aux = ['H2O', 'OH-']
+    # create left and right copies of auxiliaries and electrons so they may appear on either side
+    aux_left = list(base_aux)
+    aux_right = list(base_aux)
+    # electrons as a special auxiliary (allow on either side)
+    aux_left.append('e')
+    aux_right.append('e')
+
+    all_species = comps + aux_left + aux_right
+    def _parse_special(s: str):
+        # parse species possibly with trailing numeric charge, e.g. Mn2+
+        if s == 'e':
+            return {}
+        # remove trailing charge for composition parsing
+        m = re.match(r"^(.+?)(\d+)?([+-])$", s)
+        if m:
+            base = m.group(1)
+            return parse_formula(base)
+        if s == 'H+':
+            return {'H': 1}
+        if s == 'OH-' or s == 'OH':
+            return {'O': 1, 'H': 1}
+        return parse_formula(s)
+
+    parsed = [_parse_special(s) for s in all_species]
+
+    # elements rows (exclude 'e')
+    elem_set = set()
+    for p in parsed:
+        elem_set.update(p.keys())
+    elements = sorted(elem_set)
+    # build matrix rows: elements + charge
+    rows = []
+    for el in elements:
+        row = []
+        for i, p in enumerate(parsed):
+            cnt = p.get(el, 0)
+            # reactants positive, products negative, aux considered positive side (we'll treat signs later by index)
+            row.append(Fraction(cnt))
+        rows.append(row)
+    # charge row
+    charge_row = []
+    for s in all_species:
+        charge_row.append(Fraction(_charge_of_species(s)))
+    rows.append(charge_row)
+
+    # Now we need to set sign convention: reactants columns positive, products negative, aux columns depend (we'll keep as variables and treat equality)
+    cols = len(all_species)
+    A = [list(r) for r in rows]
+
+    # We want sum(reactant_counts * coeffs_reactants) == sum(product_counts * coeffs_products) + sum(aux_counts * coeffs_aux)
+    # This can be rearranged to A_full * x = 0 where columns for reactants are positive, products negative, aux positive on products side -> we move to left
+    # To construct homogeneous system, we set sign = +1 for reactants, -1 for products, and -1 for aux (since aux placed on product side)
+    signs = []
+    n_react = len(reactants)
+    n_prod = len(products)
+    n_aux = len(aux_left)
+    # order: [reactants..., products..., aux_left..., aux_right...]
+    for i in range(len(all_species)):
+        if i < n_react:
+            signs.append(Fraction(1))
+        elif i < n_react + n_prod:
+            signs.append(Fraction(-1))
+        elif i < n_react + n_prod + n_aux:
+            # aux_left: treat as additional reactant-side auxiliaries
+            signs.append(Fraction(1))
+        else:
+            # aux_right: treat as additional product-side auxiliaries
+            signs.append(Fraction(-1))
+
+    # Multiply each column by sign to get homogeneous eqn
+    for i in range(len(A)):
+        for j in range(cols):
+            A[i][j] *= signs[j]
+
+    # Solve A x = 0 similar to balance_equation
+    rows_n = len(A)
+    cols_n = cols
+    # gaussian elimination
+    M = [list(r) for r in A]
+    r = 0
+    pivot_cols = []
+    for c in range(cols_n):
+        pivot = None
+        for i in range(r, rows_n):
+            if M[i][c] != 0:
+                pivot = i; break
+        if pivot is None:
+            continue
+        M[r], M[pivot] = M[pivot], M[r]
+        pv = M[r][c]
+        M[r] = [val / pv for val in M[r]]
+        for i in range(rows_n):
+            if i != r and M[i][c] != 0:
+                factor = M[i][c]
+                M[i] = [M[i][j] - factor * M[r][j] for j in range(cols_n)]
+        pivot_cols.append(c)
+        r += 1
+        if r == rows_n:
+            break
+
+    free_cols = [c for c in range(cols_n) if c not in pivot_cols]
+    if not free_cols:
+        return None
+
+    # try assigning small integers to free cols
+    from math import gcd
+    from functools import reduce
+    candidates = []
+    for free in free_cols:
+        for v in range(1, 7):
+            sol = [Fraction(0) for _ in range(cols_n)]
+            sol[free] = Fraction(v)
+            row_idx = 0
+            for c in pivot_cols:
+                s = Fraction(0)
+                for j in range(c + 1, cols_n):
+                    s += M[row_idx][j] * sol[j]
+                sol[c] = -s
+                row_idx += 1
+            denoms = [s.denominator for s in sol]
+            lcm = 1
+            for d in denoms:
+                lcm = lcm * d // gcd(lcm, d)
+            ints = [int(s * lcm) for s in sol]
+            if all(vv == 0 for vv in ints):
+                continue
+            nonzero = [abs(vv) for vv in ints if vv != 0]
+            g = reduce(gcd, nonzero) if nonzero else 1
+            ints = [vv // g for vv in ints]
+            # interpret coefficients: split into reactants/products/aux
+            r_coeffs = ints[:n_react]
+            p_coeffs = ints[n_react:n_react + n_prod]
+            aux_coeffs = ints[n_react + n_prod:]
+            # require reactant and product coefficients >0
+            if all(c > 0 for c in r_coeffs) and all(c > 0 for c in p_coeffs):
+                # ensure auxiliary coefficients are integers (can be zero)
+                candidates.append((sum(abs(x) for x in ints), ints))
+
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: x[0])
+    best = candidates[0][1]
+    react_coeffs = best[:n_react]
+    prod_coeffs = best[n_react:n_react + n_prod]
+    # If solution found, return
+    return react_coeffs, prod_coeffs
+
+
+def half_reaction_balance(reactants: List[str], products: List[str], medium: str = 'neutral') -> Optional[Dict]:
+    """Balance a half-reaction, returning coefficients including electrons if present.
+
+    Returns dict: {'reactants': [...], 'products': [...], 'react_coeffs': [...], 'prod_coeffs': [...], 'electrons': n}
+    or None if cannot balance.
+    """
+    # Preprocess salts: for common salts like KMnO4 convert to anion MnO4 if possible
+    def _salt_to_anion(s: str) -> str:
+        # match leading cation (e.g., K, K2, Na, etc.)
+        m = re.match(r"^([A-Z][a-z]?\d*)(.+)$", s)
+        if m:
+            head = m.group(1)
+            tail = m.group(2)
+            # strip leading digits in tail
+            tail = tail
+            key = tail.strip('()')
+            if key in ANION_CHARGES:
+                return key
+        return s
+
+    r_proc = [_salt_to_anion(s) for s in reactants]
+    p_proc = [_salt_to_anion(s) for s in products]
+
+    # Try aux-aware balance where we allow electrons explicitly on either side
+    b = try_balance(r_proc, p_proc, medium)
+    if not b:
+        return None
+    r_coeffs, p_coeffs = b
+    # No explicit electrons returned by try_balance (they were internal aux) — we attempt to detect net electron change
+    # We'll attempt another call forcing 'e' into products and reactants to find electron coefficient
+    # Append e to products and try to balance (operate on processed lists)
+    b2 = try_balance(r_proc, p_proc + ['e'], medium)
+    if b2:
+        rc2, pc2 = b2
+        # electron coefficient is last of pc2
+        electrons = pc2[-1]
+        return {
+            'reactants': reactants,
+            'products': products,
+            'react_coeffs': rc2,
+            'prod_coeffs': pc2[:-1],
+            'electrons': electrons,
+        }
+    # try electrons on reactant side
+    b3 = try_balance(r_proc + ['e'], p_proc, medium)
+    if b3:
+        rc3, pc3 = b3
+        electrons = rc3[-1]
+        return {
+            'reactants': reactants,
+            'products': products,
+            'react_coeffs': rc3[:-1],
+            'prod_coeffs': pc3,
+            'electrons': -electrons,  # negative means electrons produced on product side
+        }
+    # fallback: no explicit electron found — return coefficients without electrons
+    return {
+        'reactants': reactants,
+        'products': products,
+        'react_coeffs': r_coeffs,
+        'prod_coeffs': p_coeffs,
+        'electrons': 0,
+    }
+
+
+def combine_half_reactions(h1: Dict, h2: Dict) -> Optional[Tuple[List[int], List[int], List[str]]]:
+    """Combine two half-reactions (h1 oxid, h2 red or vice versa) into full balanced equation.
+
+    h1/h2 are dicts returned by half_reaction_balance. Returns (react_coeffs, prod_coeffs, species_list)
+    where species_list is [reactants..., products...].
+    """
+    # Determine electrons produced/consumed
+    e1 = h1.get('electrons', 0)
+    e2 = h2.get('electrons', 0)
+    # electrons sign convention: positive means on product side (produced), negative means consumed
+    # We want to multiply halves so that electron counts cancel: n1*e1 + n2*e2 == 0
+    if e1 == 0 and e2 == 0:
+        # simple concatenation if no electrons involved
+        reactants = h1['reactants'] + h2['reactants']
+        products = h1['products'] + h2['products']
+        # combine coeffs
+        rcoeffs = h1['react_coeffs'] + h2['react_coeffs']
+        pcoeffs = h1['prod_coeffs'] + h2['prod_coeffs']
+        return rcoeffs, pcoeffs, reactants + products
+    # else find multipliers m1,m2 such that m1*e1 + m2*e2 == 0
+    from math import gcd
+    if e1 == 0 or e2 == 0:
+        return None
+    # find least common multiple
+    def lcm(a, b):
+        return abs(a * b) // gcd(a, b)
+    L = lcm(abs(e1), abs(e2))
+    m1 = L // abs(e1)
+    m2 = L // abs(e2)
+    # scale coefficients
+    rcoeffs_full = [c * m1 for c in h1['react_coeffs']] + [c * m2 for c in h2['react_coeffs']]
+    pcoeffs_full = [c * m1 for c in h1['prod_coeffs']] + [c * m2 for c in h2['prod_coeffs']]
+    reactants = h1['reactants'] + h2['reactants']
+    products = h1['products'] + h2['products']
+    # cancel identical species between products and reactants
+    # combine counts for each unique species
+    from collections import Counter
+    left = Counter()
+    right = Counter()
+    for coef, sp in zip(rcoeffs_full, reactants):
+        left[sp] += coef
+    for coef, sp in zip(pcoeffs_full, products):
+        right[sp] += coef
+    # subtract common
+    for sp in list(left.keys()):
+        if sp in right:
+            common = min(left[sp], right[sp])
+            left[sp] -= common
+            right[sp] -= common
+            if left[sp] == 0:
+                del left[sp]
+            if right[sp] == 0:
+                del right[sp]
+    final_reactants = list(left.keys())
+    final_rcoeffs = [left[s] for s in final_reactants]
+    final_products = list(right.keys())
+    final_pcoeffs = [right[s] for s in final_products]
+    if not final_reactants or not final_products:
+        return None
+    return final_rcoeffs, final_pcoeffs, final_reactants + final_products
+
+
+def try_balance(reactants: List[str], products: List[str], medium: str = 'neutral') -> Optional[Tuple[List[int], List[int]]]:
+    """Try balancing using auxiliary-aware solver first, then fallback to classic balance_equation."""
+    try:
+        b = balance_with_aux(reactants, products, medium)
+        if b:
+            return b
+    except Exception:
+        pass
+
+    # Try half-reaction based generation for detected oxidizer/reducer pairs
+    def generate_half_variants(reacts: List[str]) -> List[ReactionVariant]:
+        out: List[ReactionVariant] = []
+        # simple lists of recognizable oxidizers and reducers
+        oxidizers = ['MnO4', 'Cr2O7', 'Cl2', 'Br2', 'I2', 'NO3', 'ClO3', 'ClO4']
+        reducers = ['H2O2', 'I-', 'I', 'Fe2+', 'Fe', 'SO3', 'S2O3', 'H2S', 'HS-', 'S2-', 'C2O4', 'H2']
+
+        medium = detect_medium(reacts)
+
+        # helper to check presence (allow salts like KMnO4 -> MnO4)
+        def contains_key(key: str) -> bool:
+            for r in reacts:
+                if key in r:
+                    return True
+            return False
+
+        found_ox = [k for k in oxidizers if contains_key(k)]
+        found_red = [k for k in reducers if contains_key(k)]
+
+        # also detect metal-based reducers (e.g., Fe in FeSO4 -> Fe2+)
+        for r in reacts:
+            m = metal_from_formula(r)
+            if m:
+                # if metal commonly has a +2 state, consider it a reducer
+                common = METAL_COMMON_CHARGES.get(m)
+                if common == 2 and (f'{m}2+' not in found_red):
+                    found_red.append(f'{m}2+')
+                # also if the formula explicitly contains element symbol at start, treat as possible reducer
+                if re.match(rf'^{m}', r) and (m not in found_red):
+                    found_red.append(m)
+
+        # If still none detected, try scanning for common element markers (I, S)
+        if not found_red:
+            for r in reacts:
+                if re.search(r"I2|I-|\bI\b", r):
+                    found_red.append('I-')
+                if re.search(r"S2O3|SO3|H2S|HS-|S2-", r):
+                    found_red.append('S2-')
+
+        for ox in found_ox:
+            for rd in found_red:
+                # build candidate product templates depending on ox and medium
+                # permanganate
+                if 'MnO4' in ox:
+                    if medium == 'acidic':
+                        prod_ox = ['Mn2+']
+                    else:
+                        prod_ox = ['MnO2']
+                elif 'Cr2O7' in ox:
+                    if medium == 'acidic':
+                        prod_ox = ['Cr3+']
+                    else:
+                        prod_ox = ['Cr2O3']
+                elif ox in ('Cl2','Br2','I2'):
+                    # handled earlier; skip here
+                    continue
+                else:
+                    # generic oxidizer: attempt to reduce oxygen-containing oxidizers to O2
+                    prod_ox = ['O2']
+
+                # reducer product templates
+                if rd == 'H2O2':
+                    prod_rd = ['O2']
+                elif rd in ('I-','I'):
+                    prod_rd = ['I2']
+                elif rd.startswith('Fe'):
+                    prod_rd = ['Fe3+']
+                else:
+                    prod_rd = []
+
+                if not prod_rd:
+                    continue
+
+                # balance half-reactions
+                h_ox = half_reaction_balance([ox], prod_ox, medium)
+                h_rd = half_reaction_balance([rd], prod_rd, medium)
+                if not h_ox or not h_rd:
+                    continue
+                comb = combine_half_reactions(h_ox, h_rd)
+                if comb:
+                    rcoeffs, pcoeffs, species_list = comb
+                    try:
+                        combined_products = list(species_list[len(rcoeffs):]) if len(species_list) > len(rcoeffs) else []
+                        b = try_balance(reacts, combined_products, medium)
+                        if b:
+                            out.append(ReactionVariant('oxidation_reduction', reacts, combined_products, b, f'Half-reaction combination: {ox} + {rd}'))
+                    except Exception:
+                        pass
+        # additionally, try heuristic-generated half-reaction candidates for broader coverage
+        try:
+            hr_cands = generate_half_reaction_candidates(reacts)
+            # pairwise combine distinct candidates
+            for i in range(len(hr_cands)):
+                for j in range(i + 1, len(hr_cands)):
+                    lhs1, rhs1, d1 = hr_cands[i]
+                    lhs2, rhs2, d2 = hr_cands[j]
+                    h1 = half_reaction_balance(lhs1, rhs1, medium)
+                    h2 = half_reaction_balance(lhs2, rhs2, medium)
+                    if not h1 or not h2:
+                        continue
+                    comb2 = combine_half_reactions(h1, h2)
+                    if comb2:
+                        rcoeffs, pcoeffs, species_list = comb2
+                        try:
+                            combined_products = list(species_list[len(rcoeffs):]) if len(species_list) > len(rcoeffs) else []
+                            b2 = try_balance(reacts, combined_products, medium)
+                            if b2:
+                                out.append(ReactionVariant('oxidation_reduction', reacts, combined_products, b2, f'Heuristic half combo: {d1} + {d2}'))
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+        return out
+
+    half_vars = generate_half_variants(reactants)
+    if half_vars:
+        # generate_half_variants produces ReactionVariant objects for callers higher-level
+        # but `try_balance` should not mutate an external `variants` list here.
+        # We simply ignore them in this balancing helper.
+        pass
+    # fallback
+    try:
+        return balance_equation(reactants, products)
+    except Exception:
+        return None
+
+
 ### Генерация вариантов реакций
 @dataclass
 class ReactionVariant:
@@ -428,6 +1026,15 @@ def is_acid(formula: str) -> bool:
 def is_base(formula: str) -> bool:
     # простая эвристика: содержит OH или имеет металлический катион и OH
     return "OH" in formula or formula.endswith("OH")
+
+
+def detect_medium(reacts: List[str]) -> str:
+    """Detect reaction medium: 'acidic', 'basic' or 'neutral'."""
+    if any(is_base(r) for r in reacts) or any('OH' in r for r in reacts):
+        return 'basic'
+    if any(is_acid(r) for r in reacts):
+        return 'acidic'
+    return 'neutral'
 
 
 def metal_from_formula(formula: str) -> Optional[str]:
@@ -728,6 +1335,19 @@ def oxidation_reduction_variant(reactants: List[str]) -> Optional[ReactionVarian
     if len(reactants) < 2:
         return None
 
+    # Handle diatomic halogen + water (neutral disproportionation)
+    # Cl2 + H2O -> HCl + HClO
+    if any(r == 'H2O' for r in reactants):
+        for hal in ('Cl','Br','I'):
+            if any(r == f"{hal}2" for r in reactants):
+                other = [r for r in reactants if r != 'H2O' and r != f"{hal}2"]
+                # allow just Cl2 + H2O or with other inert species ignored
+                products = [f"H{hal}", f"H{hal}O"]
+                steps = f"Redox disproportionation with water: {hal}2 + H2O -> H{hal} + H{hal}O"
+                balanced = balance_equation(reactants, products)
+                if balanced is not None:
+                    return ReactionVariant('oxidation_reduction', reactants, products, balanced, steps)
+
     # try to detect a diatomic halogen among any reactants (Cl2, Br2, I2)
     hal_match = None
     for hal in ('Cl','Br','I'):
@@ -765,13 +1385,13 @@ def oxidation_reduction_variant(reactants: List[str]) -> Optional[ReactionVarian
         hypohalite = f"{cat}{hal}O"
         products1 = [halide, hypohalite, 'H2O']
         steps1 = f"Redox disproportionation (cold/dilute): {hal_formula} + {other} -> {halide} + {hypohalite} + H2O"
-        balanced1 = balance_equation(reactants, products1)
+        balanced1 = try_balance(reactants, products1, detect_medium(reactants))
 
         # chlorate variant
         chlorate = f"{cat}{hal}O3"
         products2 = [halide, chlorate, 'H2O']
         steps2 = f"Redox disproportionation (hot/concentrated): {hal_formula} + {other} -> {halide} + {chlorate} + H2O"
-        balanced2 = balance_equation(reactants, products2)
+        balanced2 = try_balance(reactants, products2, detect_medium(reactants))
 
         if balanced1 is not None:
             variants.append(ReactionVariant('oxidation_reduction', reactants, products1, balanced1, steps1))
@@ -781,14 +1401,7 @@ def oxidation_reduction_variant(reactants: List[str]) -> Optional[ReactionVarian
     # Also attempt more general redox handling for common oxidizers/reducers
     # (permanganate/dichromate with peroxide, etc.)
     try:
-        # helper to detect acidic/base environment
-        def detect_medium(reacts: List[str]) -> str:
-            if any(is_base(r) for r in reacts) or any('OH' in r for r in reacts):
-                return 'basic'
-            if any(is_acid(r) for r in reacts):
-                return 'acidic'
-            return 'neutral'
-
+        # detect medium using module helper
         medium = detect_medium(reactants)
 
         # General: permanganate + peroxide
@@ -809,14 +1422,14 @@ def oxidation_reduction_variant(reactants: List[str]) -> Optional[ReactionVarian
                 cat_salt = f"{cat}{acid_anion}"
                 products_acid = ['O2', mn_salt, cat_salt, 'H2O']
                 steps_acid = f"Redox (acidic): {mn} + {per} -> O2 + {mn_salt} + {cat_salt} + H2O"
-                b_acid = balance_equation(reactants, products_acid)
+                b_acid = try_balance(reactants, products_acid, 'acidic')
                 if b_acid is not None:
                     variants.append(ReactionVariant('oxidation_reduction', reactants, products_acid, b_acid, steps_acid))
             # neutral/basic variant: MnO2 (s), O2, metal hydroxide, water
             hydroxide = f"{cat}OH"
             products_neutral = ['O2', 'MnO2', hydroxide, 'H2O']
             steps_neutral = f"Redox (neutral/basic): {mn} + {per} -> O2 + MnO2 + {hydroxide} + H2O"
-            b_neu = balance_equation(reactants, products_neutral)
+            b_neu = try_balance(reactants, products_neutral, medium)
             if b_neu is not None:
                 variants.append(ReactionVariant('oxidation_reduction', reactants, products_neutral, b_neu, steps_neutral))
 
@@ -836,14 +1449,14 @@ def oxidation_reduction_variant(reactants: List[str]) -> Optional[ReactionVarian
                 cat_salt = f"{cat}{acid_anion}"
                 products_acid = ['O2', cr_salt, cat_salt, 'H2O']
                 steps_acid = f"Redox (acidic): {cr} + {per} -> O2 + {cr_salt} + {cat_salt} + H2O"
-                b_acid = balance_equation(reactants, products_acid)
+                b_acid = try_balance(reactants, products_acid, 'acidic')
                 if b_acid is not None:
                     variants.append(ReactionVariant('oxidation_reduction', reactants, products_acid, b_acid, steps_acid))
             # neutral/basic: Cr2O3 + O2 + metal hydroxide + H2O (approx)
             hydroxide = f"{cat}OH"
             products_neu = ['O2', 'Cr2O3', hydroxide, 'H2O']
             steps_neu = f"Redox (neutral/basic): {cr} + {per} -> O2 + Cr2O3 + {hydroxide} + H2O"
-            b_neu = balance_equation(reactants, products_neu)
+            b_neu = try_balance(reactants, products_neu, medium)
             if b_neu is not None:
                 variants.append(ReactionVariant('oxidation_reduction', reactants, products_neu, b_neu, steps_neu))
     except Exception:
