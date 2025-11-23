@@ -21,9 +21,10 @@ import ast
 
 from playwright.async_api import async_playwright
 
-# Импорт системы управления правами
-sys.path.insert(0, str(Path(__file__).parent / "configs_folder"))
+
 import configs_folder.perms_manager as perms_manager
+import chem_reactions 
+
 
 # ------------------ main vars setup ------------------
 SCRIPT_DIR = Path(__file__).parent
@@ -1446,7 +1447,77 @@ def mainbotstart():
         except Exception as e:
             logger.error(e)
             await interaction.response.send_message("Ошибка установки канала! (см логи)", ephemeral=False)
-        
+
+    # ----------------------------
+    # SLASH: /chemical_reactions reactants
+    # ----------------------------
+    @bot.tree.command(name="chemical_reactions", description="Анализ и генерация возможных уравнений реакции по списку реагентов (owner only)")
+    async def chemical_reactions(interaction: discord.Interaction, reactants: str):
+
+        await interaction.response.defer(ephemeral=False)
+
+        # команда только на сервере
+        if interaction.guild is None:
+            await interaction.followup.send("Эта команда работает только на сервере.", ephemeral=True)
+            return
+
+        # проверка прав (только OWNER по умолчанию)
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
+            await interaction.followup.send("У вас недостаточно прав использовать эту команду!", ephemeral=True)
+            logging.debug(f"{interaction.user.name} try use chemical_reactions")
+            return
+
+        # Парсим строку реагентов
+        try:
+            parts = chem_reactions.parse_reactants_from_string(reactants)
+        except Exception as e:
+            await interaction.followup.send(f"Ошибка при разборе реагентов: {e}", ephemeral=True)
+            return
+
+        if not parts:
+            await interaction.followup.send("Не удалось распознать реагенты. Укажите через `+` или `,` (например: `HCl , NaOH`).", ephemeral=True)
+            return
+
+        # Вызываем движок реакций
+        try:
+            results = chem_reactions.try_all_reaction_paths(parts)
+        except Exception as e:
+            logging.exception(f"Ошибка в chem_reactions: {e}")
+            await interaction.followup.send(f"Внутренняя ошибка при анализе реакции: {e}", ephemeral=True)
+            return
+
+        proceeded = results.get('proceeded', []) or []
+        blocked = results.get('possible_but_no_reaction', []) or []
+
+        summary = [f"Reactants: {', '.join(parts)}", f"✅ Прошли вариантов: {len(proceeded)}", f"⚠️ Возможны, но не идут: {len(blocked)}"]
+        await interaction.followup.send("\n".join(summary), ephemeral=False)
+
+        # Функция для отправки подробного варианта (ограниченно по длине)
+        async def send_variant(idx: int, rec: dict, tag: str):
+            header = f"{tag} #{idx} — {rec.get('type') or ''}"
+            body = rec.get('pretty') or ''
+            payload = f"{header}\n\n{body}"
+            # Discord ограничение: ~2000 символов. Обрезаем аккуратно.
+            if len(payload) > 1900:
+                payload = payload[:1900] + "\n... (truncated)"
+            try:
+                await interaction.followup.send(f"```{payload}```", ephemeral=False)
+            except Exception:
+                await interaction.followup.send(payload[:1900], ephemeral=False)
+
+        # Отправляем до 5 подробных вариантов из каждой категории
+        for i, rec in enumerate(proceeded[:5], start=1):
+            await send_variant(i, rec, "Прошёл")
+
+        for i, rec in enumerate(blocked[:5], start=1):
+            await send_variant(i, rec, "Возможен, но не идёт")
+
+        # Подсказка об ограничении
+        if len(proceeded) > 5 or len(blocked) > 5:
+            await interaction.followup.send("Показаны первые 5 вариантов в каждой категории. Уточните запрос для более узкого вывода.", ephemeral=True)
+
+        return
+
     # ----------------------------
     # ОБРАБОТКА ОСТАЛЬНЫХ СООБЩЕНИЙ
     # ----------------------------      
