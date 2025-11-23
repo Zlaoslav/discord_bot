@@ -1454,19 +1454,6 @@ def mainbotstart():
     @bot.tree.command(name="chemical_reactions", description="Анализ и генерация возможных уравнений реакции по списку реагентов (owner only)")
     async def chemical_reactions(interaction: discord.Interaction, reactants: str):
 
-        await interaction.response.defer(ephemeral=False)
-
-        # команда только на сервере
-        if interaction.guild is None:
-            await interaction.followup.send("Эта команда работает только на сервере.", ephemeral=True)
-            return
-
-        # проверка прав (только OWNER по умолчанию)
-        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
-            await interaction.followup.send("У вас недостаточно прав использовать эту команду!", ephemeral=True)
-            logging.debug(f"{interaction.user.name} try use chemical_reactions")
-            return
-
         # Парсим строку реагентов
         try:
             parts = chem_reactions.parse_reactants_from_string(reactants)
