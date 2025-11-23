@@ -46,6 +46,66 @@ __all__ = [
     "enable_ascii_steps",
 ]
 
+# Timeout utilities
+import multiprocessing
+import traceback
+
+
+def _run_with_timeout(func, args=(), kwargs=None, timeout: float = 5.0):
+    """Run func(*args, **kwargs) in a separate process with timeout (seconds).
+
+    Returns the function result or raises TimeoutError on timeout, or re-raises worker exception.
+    """
+    if kwargs is None:
+        kwargs = {}
+
+    def _worker(q, fn, args, kwargs):
+        try:
+            res = fn(*args, **kwargs)
+            q.put((True, res))
+        except Exception:
+            tb = traceback.format_exc()
+            q.put((False, tb))
+
+    q = multiprocessing.Queue()
+    p = multiprocessing.Process(target=_worker, args=(q, func, args, kwargs))
+    p.start()
+    p.join(timeout)
+    if p.is_alive():
+        try:
+            p.terminate()
+        except Exception:
+            pass
+        p.join()
+        raise TimeoutError(f"Operation timed out after {timeout} seconds")
+    if q.empty():
+        raise RuntimeError("Worker finished but returned no result")
+    ok, payload = q.get()
+    if ok:
+        return payload
+    else:
+        raise RuntimeError(f"Worker error:\n{payload}")
+
+
+def generate_reactions_with_timeout(reactants: List[str], timeout: float = 5.0) -> List[Dict]:
+    """Safe wrapper around `generate_reactions` with a timeout (seconds).
+
+    Raises `TimeoutError` if computation exceeds `timeout` seconds.
+    """
+    return _run_with_timeout(generate_reactions, args=(reactants,), timeout=timeout)
+
+
+def generate_balanced_equations_with_timeout(reactants: List[str], timeout: float = 5.0) -> List[Dict]:
+    """Wrapper around `generate_balanced_equations` with a timeout."""
+    return _run_with_timeout(generate_balanced_equations, args=(reactants,), timeout=timeout)
+
+
+# export new helpers
+__all__.extend([
+    'generate_reactions_with_timeout',
+    'generate_balanced_equations_with_timeout',
+])
+
 
 ### Набор данных (упрощённый)
 # Упрощённая таблица растворимости: True = растворимо, False = малорастворимо/осадок
@@ -237,6 +297,23 @@ def parse_formula(formula: str) -> Dict[str, int]:
 
     counts, _ = parse_tokens(0)
     return counts
+
+
+def is_valid_formula(formula: str) -> bool:
+    """Quick sanity check for formula-like strings to avoid pathological inputs.
+
+    Accepts letters, digits, parentheses and trailing +/- charges. Rejects very long or empty strings.
+    """
+    if not formula or not isinstance(formula, str):
+        return False
+    if len(formula) > 80:
+        return False
+    # allowed characters: letters, digits, parentheses, plus, minus
+    if not re.match(r"^[A-Za-z0-9()\+\-]+$", formula):
+        return False
+    # tokenise and ensure at least one element token
+    toks = token_re.findall(formula)
+    return len(toks) > 0
 
 
 def _parse_charge_suffix(formula: str) -> Tuple[str, int]:
@@ -444,8 +521,11 @@ def balance_equation(reactants: List[str], products: List[str]) -> Optional[Tupl
 
     # Попробуем несколько вариантов выбора свободной переменной, чтобы получить положительные коэффициенты
     candidates = []
-    for free in free_cols:
-        for free_val in range(1, 7):
+    # защита от зависания: ограничим число свободных столбцов, которые пробуем
+    max_free_try = 6
+    free_to_try = free_cols[:max_free_try]
+    for free in free_to_try:
+        for free_val in range(1, max_free_try + 1):
             sol_try = [Fraction(0) for _ in range(cols)]
             sol_try[free] = Fraction(free_val)
             row_idx = 0
@@ -512,10 +592,13 @@ def balance_equation(reactants: List[str], products: List[str]) -> Optional[Tupl
     prod_coeffs = ints[len(reactants) :]
     # If some product/reactant coefficients are zero or non-positive, try a small brute-force search
     if any(c <= 0 for c in react_coeffs) or any(c <= 0 for c in prod_coeffs):
-        # brute-force small integer coefficients (1..8) to find a valid balancing where all coeff > 0
+        # small brute-force only for small systems to avoid combinatorial explosion
+        total_species = len(reactants) + len(products)
+        if total_species > 6:
+            return None
         from collections import Counter
         from itertools import product
-        max_coeff = 8
+        max_coeff = 5
         found = None
         for r_choice in product(range(1, max_coeff + 1), repeat=len(reactants)):
             left = Counter()
@@ -699,8 +782,11 @@ def balance_with_aux(reactants: List[str], products: List[str], medium: str = 'n
     from math import gcd
     from functools import reduce
     candidates = []
-    for free in free_cols:
-        for v in range(1, 7):
+    # avoid exploring too many free variables for large systems
+    max_free_try_aux = 6
+    free_to_try_aux = free_cols[:max_free_try_aux]
+    for free in free_to_try_aux:
+        for v in range(1, max_free_try_aux + 1):
             sol = [Fraction(0) for _ in range(cols_n)]
             sol[free] = Fraction(v)
             row_idx = 0
@@ -990,12 +1076,17 @@ def try_balance(reactants: List[str], products: List[str], medium: str = 'neutra
 
         return out
 
-    half_vars = generate_half_variants(reactants)
-    if half_vars:
-        # generate_half_variants produces ReactionVariant objects for callers higher-level
-        # but `try_balance` should not mutate an external `variants` list here.
-        # We simply ignore them in this balancing helper.
-        pass
+    # Avoid expensive half-reaction generation for large numbers of reactants
+    half_vars = []
+    if len(reactants) <= 4:
+        try:
+            half_vars = generate_half_variants(reactants)
+            # if any half-variant produced a direct balanced result, return it
+            for hv in half_vars:
+                if hv and hv.balanced:
+                    return hv.balanced
+        except Exception:
+            half_vars = []
     # fallback
     try:
         return balance_equation(reactants, products)
@@ -1631,6 +1722,13 @@ def generate_reactions(reactants: List[str]) -> List[Dict]:
 
     Возвращает список словарей с подробностями.
     """
+    # quick validation: reject pathological inputs to avoid hangs
+    if not isinstance(reactants, list) or any(not is_valid_formula(r) for r in reactants):
+        return []
+    # limit extreme input sizes for safety
+    if len(reactants) > 8:
+        return []
+
     variants: List[ReactionVariant] = []
     # Попробуем нейтрализацию
     n = neutralization_variant(reactants)
