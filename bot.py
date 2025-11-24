@@ -1878,12 +1878,14 @@ def mainbotstart():
                                 pass
                             # строим новые overwrites: блокируем @everyone и разрешаем trusted
                             new_overwrites = {}
-                            new_overwrites[interaction.guild.default_role] = discord.PermissionOverwrite(connect=False)
+                            # Запретим подключение для @everyone (voice-specific)
+                            new_overwrites[interaction.guild.default_role] = discord.PermissionOverwrite(connect=False, view_channel=False)
+                            # Разрешим доступ для доверенных пользователей (voice perms)
                             for uid in (settings.get('trusted_users') or []):
                                 try:
                                     m = interaction.guild.get_member(int(uid))
                                     if m:
-                                        new_overwrites[m] = discord.PermissionOverwrite(connect=True, manage_channels=True)
+                                        new_overwrites[m] = discord.PermissionOverwrite(connect=True, speak=True, manage_channels=True)
                                 except Exception:
                                     continue
                             try:
@@ -1921,45 +1923,58 @@ def mainbotstart():
 
         @discord.ui.button(label="🚪 Отключить участника", style=discord.ButtonStyle.danger)
         async def disconnect_member(self, interaction: discord.Interaction, button: discord.ui.Button):
-            class KickModal(discord.ui.Modal, title="🚪 Отключить участника от вашего TempVoice"):
-                member = discord.ui.TextInput(label="Упомяните участника или ID", placeholder="@nick или 123456789012345678")
+            # Предоставляем список участников только из вашего временного канала
+            voice_id = get_temp_channel_for_user(self.trigger_channel_id, interaction.user.id)
+            if not voice_id:
+                await interaction.response.send_message("У вас нет временного канала.", ephemeral=True)
+                return
+            ch = interaction.guild.get_channel(int(voice_id))
+            if not ch:
+                await interaction.response.send_message("Канал не найден.", ephemeral=True)
+                remove_temp_mapping_by_user(self.trigger_channel_id, interaction.user.id)
+                return
 
-                async def on_submit(self_inner, modal_inter: discord.Interaction):
-                    raw = self_inner.member.value.strip()
-                    # попытка извлечь ID
-                    m_id = None
-                    try:
-                        if raw.startswith("<@"):
-                            m_id = int(re.sub(r"\D", "", raw))
-                        else:
-                            m_id = int(raw)
-                    except Exception:
-                        await modal_inter.response.send_message("Не удалось распознать ID.", ephemeral=True)
-                        return
-                    guild = modal_inter.guild
-                    member_obj = guild.get_member(m_id) or await guild.fetch_member(m_id)
-                    if not member_obj:
-                        await modal_inter.response.send_message("Участник не найден.", ephemeral=True)
-                        return
-                    voice_id = get_temp_channel_for_user(self.trigger_channel_id, modal_inter.user.id)
-                    if not voice_id:
-                        await modal_inter.response.send_message("У вас нет временного канала.", ephemeral=True)
-                        return
-                    ch = guild.get_channel(int(voice_id))
-                    if not ch:
-                        await modal_inter.response.send_message("Канал не найден.", ephemeral=True)
-                        return
-                    try:
-                        if member_obj.voice and member_obj.voice.channel and member_obj.voice.channel.id == ch.id:
-                            await member_obj.move_to(None)
-                            await modal_inter.response.send_message(f"Участник {member_obj.mention} отключён.", ephemeral=True)
-                        else:
-                            await modal_inter.response.send_message("Участник не в вашем временном канале.", ephemeral=True)
-                    except Exception as e:
-                        logging.warning(e)
-                        await modal_inter.response.send_message("Ошибка при отключении.", ephemeral=True)
+            members = [m for m in ch.members if not m.bot and m.id != interaction.user.id]
+            if not members:
+                await interaction.response.send_message("В вашем канале нет других участников для отключения.", ephemeral=True)
+                return
 
-            await interaction.response.send_modal(KickModal())
+            # Ограничение опций селекта до 25 (максимум Discord)
+            options = [discord.SelectOption(label=m.display_name[:100], value=str(m.id), description=f"{m.id}") for m in members[:25]]
+
+            class MemberSelect(discord.ui.Select):
+                def __init__(self, opts, channel_id):
+                    super().__init__(placeholder="Выберите участника(ов) для отключения...", min_values=1, max_values=min(len(opts), 25), options=opts)
+                    self.channel_id = channel_id
+
+                async def callback(self, select_inter: discord.Interaction):
+                    guild = select_inter.guild
+                    results = {"kicked": [], "failed": []}
+                    for val in self.values:
+                        try:
+                            uid = int(val)
+                            member_obj = guild.get_member(uid) or await guild.fetch_member(uid)
+                            if member_obj and member_obj.voice and member_obj.voice.channel and member_obj.voice.channel.id == int(self.channel_id):
+                                try:
+                                    await member_obj.move_to(None)
+                                    results["kicked"].append(member_obj.mention)
+                                except Exception:
+                                    results["failed"].append(member_obj.mention if member_obj else str(uid))
+                            else:
+                                results["failed"].append(str(uid))
+                        except Exception:
+                            results["failed"].append(val)
+
+                    parts = []
+                    if results['kicked']:
+                        parts.append(f"Отключены: {', '.join(results['kicked'])}")
+                    if results['failed']:
+                        parts.append(f"Не удалось: {', '.join(results['failed'])}")
+                    await select_inter.response.edit_message(content="\n".join(parts) or "Готово.", view=None)
+
+            view = discord.ui.View(timeout=60)
+            view.add_item(MemberSelect(options, voice_id))
+            await interaction.response.send_message("Выберите участников для отключения:", view=view, ephemeral=True)
 
         @discord.ui.button(label="🗑️ Удалить мой канал", style=discord.ButtonStyle.danger)
         async def delete_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2037,7 +2052,7 @@ def mainbotstart():
                                 lst.remove(i)
                     settings[self.field_name] = lst
                     update_tempvoice_settings(self.trig_id, settings)
-                    await select_inter.response.edit_message(content=f"✅ Обновлено поле {self.field_name} (count={len(lst)})", view=None, ephemeral=True)
+                    await select_inter.response.edit_message(content=f"✅ Обновлено поле {self.field_name} (count={len(lst)})", view=None)
 
             view = discord.ui.View(timeout=60)
             view.add_item(UsersSelect(self.trigger_channel_id, field, add))
@@ -2102,7 +2117,7 @@ def mainbotstart():
                                 lst.remove(i)
                     settings[self.field_name] = lst
                     update_tempvoice_settings(self.trig_id, settings)
-                    await select_inter.response.edit_message(content=f"✅ Обновлено поле {self.field_name} (count={len(lst)})", view=None, ephemeral=True)
+                    await select_inter.response.edit_message(content=f"✅ Обновлено поле {self.field_name} (count={len(lst)})", view=None)
 
             view = discord.ui.View(timeout=60)
             view.add_item(RolesSelect(self.trigger_channel_id, field, add))
