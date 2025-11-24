@@ -2377,13 +2377,35 @@ def mainbotstart():
         if message.author.bot:
             return
         
-        if "да" == message.content.lower():
+        msglow = message.content.lower()
+
+        if "<@1409084528588488727>" in msglow:
+            # reply автоматически упомянет автора (mention_author=True по умолчанию)
+            await message.reply(r"https://tenor.com/view/fuck-you-gif-27037587", mention_author=True, delete_after=10)
+
+        if "осуждаю" in msglow:
+            await message.reply(r"https://tenor.com/view/%D1%81%D1%82%D0%B8%D0%BD%D1%82-%D1%81%D1%82%D0%B8%D0%BD%D1%82%D0%B8%D0%BA-stint-stintik-%D0%B8%D1%81%D0%BF%D1%83%D0%B3%D0%B0%D0%BB%D1%81%D1%8F-gif-8740975965519379714", mention_author=True, delete_after=15)
+
+        if r"||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​" in msglow:
+            await message.reply(r"https://tenor.com/view/ghost-ping-troll-discord-gif-20744771", mention_author=True)
+        
+        if "@everyone" in msglow:
+            await message.reply(r"https://tenor.com/view/everyone-discord-konosuba-gif-21395141", mention_author=True, delete_after=15)
+        
+        if "@here" in msglow:
+            await message.reply(r"https://tenor.com/view/everyone-discord-gif-18237159", mention_author=True, delete_after=15)
+        
+        if "да" == msglow:
             if random.randint(1, 50) == 1:
                 await message.reply(r"пизда", mention_author=True, delete_after=60)   
 
-        if "нет" == message.content.lower():
+        if "нет" == msglow:
             if random.randint(1, 50) == 1:
                 await message.reply(r"пидора ответ", mention_author=True, delete_after=60)
+
+        if "агу" in msglow or "уээ" in msglow:
+            if random.randint(1, 50) == 1:
+                await message.reply(r"ливни с жизни ущербный https://tenor.com/view/son-agu-aaguu-aguu-aaaguu-gif-15295315305516131924", mention_author=True, delete_after=60)
         
         TENOR_RE = re.compile(r"https?://(?:www\.)?tenor\.com", re.IGNORECASE)
         DS_RE = re.compile(r"https://media.discordapp.net/")
