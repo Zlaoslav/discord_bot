@@ -98,6 +98,7 @@ intents = discord.Intents.default()
 intents.members = True          # нужен для работы с Member объектами
 intents.message_content = True  # нужен для префикс-команд (чтение сообщений)
 intents.reactions = True        # нужен для обработки реакций
+intents.voice_states = True     # нужен для отслеживания входа/выхода в войс
 bot = commands.Bot(command_prefix="?", intents=intents)  # ПРЕФИКС
 GUILD = discord.Object(id=GUILD_ID)
 
@@ -242,6 +243,17 @@ def _init_db():
             role_id INTEGER NOT NULL
         );
     """)
+    # Таблица для tempvoice (триггер-каналы и настройки)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS tempvoice (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER NOT NULL,
+            trigger_channel_id INTEGER UNIQUE NOT NULL,
+            panel_message_id INTEGER,
+            settings TEXT DEFAULT '{}',
+            current_map TEXT DEFAULT '{}'
+        );
+    """)
     conn.commit()
     conn.close()
 
@@ -366,6 +378,227 @@ def delete_role_reaction(message_id: int) -> None:
     """, (message_id,))
     conn.commit()
     conn.close()
+
+# ------------------ tempvoice helpers ------------------
+def save_tempvoice_trigger(guild_id: int, trigger_channel_id: int) -> None:
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    # default settings
+    default_settings = {
+        "prefix": "TempVoice ",
+        "user_limit": 0,
+        "bitrate": None,
+        "slowmode": 0,
+        "chat_enabled": True,
+        "locked": False,
+        "allowed_users": [],
+        "allowed_roles": [],
+        "blocked_users": [],
+        "blocked_roles": [],
+        "trusted_users": []
+    }
+    # allow trigger_channel_id==0 to mean "global / no specific trigger"
+    trig = int(trigger_channel_id) if trigger_channel_id is not None else 0
+    cur.execute("INSERT OR REPLACE INTO tempvoice (guild_id, trigger_channel_id, settings, current_map) VALUES (?, ?, ?, ?)",
+                (guild_id, trig, json.dumps(default_settings, ensure_ascii=False), json.dumps({}, ensure_ascii=False)))
+    conn.commit()
+    conn.close()
+
+def remove_tempvoice_trigger(trigger_channel_id: int) -> None:
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("DELETE FROM tempvoice WHERE trigger_channel_id = ?", (trigger_channel_id,))
+    conn.commit()
+    conn.close()
+
+def get_tempvoice_by_trigger(trigger_channel_id: int) -> Optional[dict]:
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("SELECT id, guild_id, trigger_channel_id, panel_message_id, settings, current_map FROM tempvoice WHERE trigger_channel_id = ?", (trigger_channel_id,))
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return None
+    tid, guild_id, trig_id, panel_id, settings_json, map_json = row
+    try:
+        settings = json.loads(settings_json or "{}")
+    except Exception:
+        settings = {}
+    try:
+        current_map = json.loads(map_json or "{}")
+    except Exception:
+        current_map = {}
+    return {"id": tid, "guild_id": guild_id, "trigger_channel_id": trig_id, "panel_message_id": panel_id, "settings": settings, "current_map": current_map}
+
+def get_tempvoice_by_guild(guild_id: int) -> list[dict]:
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("SELECT id, guild_id, trigger_channel_id, panel_message_id, settings, current_map FROM tempvoice WHERE guild_id = ?", (guild_id,))
+    rows = cur.fetchall()
+    conn.close()
+    out = []
+    for row in rows:
+        tid, guild_id, trig_id, panel_id, settings_json, map_json = row
+        try:
+            settings = json.loads(settings_json or "{}")
+        except Exception:
+            settings = {}
+        try:
+            current_map = json.loads(map_json or "{}")
+        except Exception:
+            current_map = {}
+        out.append({"id": tid, "guild_id": guild_id, "trigger_channel_id": trig_id, "panel_message_id": panel_id, "settings": settings, "current_map": current_map})
+    return out
+
+def update_tempvoice_settings(trigger_channel_id: int, settings: dict) -> None:
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("UPDATE tempvoice SET settings = ? WHERE trigger_channel_id = ?", (json.dumps(settings, ensure_ascii=False), trigger_channel_id))
+    conn.commit()
+    conn.close()
+
+def update_tempvoice_map(trigger_channel_id: int, current_map: dict) -> None:
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("UPDATE tempvoice SET current_map = ? WHERE trigger_channel_id = ?", (json.dumps(current_map, ensure_ascii=False), trigger_channel_id))
+    conn.commit()
+    conn.close()
+
+def set_panel_message_id(trigger_channel_id: int, message_id: Optional[int]) -> None:
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("UPDATE tempvoice SET panel_message_id = ? WHERE trigger_channel_id = ?", (message_id, trigger_channel_id))
+    conn.commit()
+    conn.close()
+
+def add_temp_mapping(trigger_channel_id: int, user_id: int, voice_channel_id: int, text_channel_id: Optional[int] = None) -> None:
+    rec = get_tempvoice_by_trigger(trigger_channel_id)
+    if not rec:
+        return
+    m = rec.get("current_map") or {}
+    # keep per-user settings here as optional field 'settings'
+    m[str(user_id)] = {"voice": int(voice_channel_id), "text": int(text_channel_id) if text_channel_id else None, "settings": {}}
+    update_tempvoice_map(trigger_channel_id, m)
+
+def remove_temp_mapping_by_voice(trigger_channel_id: int, voice_channel_id: int) -> None:
+    rec = get_tempvoice_by_trigger(trigger_channel_id)
+    if not rec:
+        return
+    m = rec.get("current_map") or {}
+    keys = [k for k, v in m.items() if v.get("voice") == int(voice_channel_id)]
+    for k in keys:
+        del m[k]
+    update_tempvoice_map(trigger_channel_id, m)
+
+def remove_temp_mapping_by_user(trigger_channel_id: int, user_id: int) -> None:
+    rec = get_tempvoice_by_trigger(trigger_channel_id)
+    if not rec:
+        return
+    m = rec.get("current_map") or {}
+    if str(user_id) in m:
+        del m[str(user_id)]
+    update_tempvoice_map(trigger_channel_id, m)
+
+def update_user_settings(trigger_channel_id: int, user_id: int, user_settings: dict) -> None:
+    rec = get_tempvoice_by_trigger(trigger_channel_id)
+    if not rec:
+        return
+    m = rec.get("current_map") or {}
+    entry = m.get(str(user_id)) or {}
+    entry_settings = entry.get("settings") or {}
+    entry_settings.update(user_settings)
+    entry["settings"] = entry_settings
+    m[str(user_id)] = entry
+    update_tempvoice_map(trigger_channel_id, m)
+
+def get_user_settings(trigger_channel_id: int, user_id: int) -> dict:
+    """Return merged settings: global settings overridden by per-user settings."""
+    rec = get_tempvoice_by_trigger(trigger_channel_id)
+    if not rec:
+        return {}
+    global_settings = rec.get("settings") or {}
+    m = rec.get("current_map") or {}
+    entry = m.get(str(user_id)) or {}
+    user_settings = entry.get("settings") or {}
+    # merge
+    merged = dict(global_settings)
+    merged.update(user_settings)
+    return merged
+
+
+def _serialize_overwrites(overwrites: dict) -> dict:
+    """Serialize channel.overwrites mapping to simple dict."""
+    out = {}
+    perms_keys = ("connect", "view_channel", "send_messages", "manage_channels", "mute_members", "deafen_members", "move_members", "priority_speaker")
+    for target, ow in (overwrites or {}).items():
+        try:
+            if isinstance(target, discord.Role):
+                key = f"role:{target.id}"
+            elif isinstance(target, discord.Member):
+                key = f"member:{target.id}"
+            else:
+                continue
+        except Exception:
+            continue
+        vals = {}
+        for p in perms_keys:
+            try:
+                v = getattr(ow, p, None)
+            except Exception:
+                v = None
+            if v is None:
+                vals[p] = None
+            else:
+                vals[p] = bool(v)
+        out[key] = vals
+    return out
+
+
+def _deserialize_overwrites(serialized: dict, guild: discord.Guild) -> dict:
+    """Deserialize mapping into {target: PermissionOverwrite} where target is Role or Member if found."""
+    out = {}
+    perms_keys = ("connect", "view_channel", "send_messages", "manage_channels", "mute_members", "deafen_members", "move_members", "priority_speaker")
+    for key, perms in (serialized or {}).items():
+        try:
+            typ, id_str = key.split(":", 1)
+            idn = int(id_str)
+        except Exception:
+            continue
+        target = None
+        if typ == "role":
+            target = guild.get_role(idn)
+        elif typ == "member":
+            target = guild.get_member(idn)
+            # if not in cache, skip (can't fetch here safely)
+        if not target:
+            continue
+        ow = discord.PermissionOverwrite()
+        for p in perms_keys:
+            v = perms.get(p)
+            try:
+                setattr(ow, p, None if v is None else bool(v))
+            except Exception:
+                pass
+        out[target] = ow
+    return out
+
+def get_temp_channel_for_user(trigger_channel_id: int, user_id: int) -> Optional[int]:
+    rec = get_tempvoice_by_trigger(trigger_channel_id)
+    if not rec:
+        return None
+    m = rec.get("current_map") or {}
+    v = m.get(str(user_id))
+    if not v:
+        return None
+    return v.get("voice")
+
+def get_all_temp_channels_for_trigger(trigger_channel_id: int) -> list[int]:
+    rec = get_tempvoice_by_trigger(trigger_channel_id)
+    if not rec:
+        return []
+    m = rec.get("current_map") or {}
+    return [v.get("voice") for v in m.values() if v.get("voice")]
+
 
 # ------------------ calculate setup ------------------
 
@@ -1449,6 +1682,458 @@ def mainbotstart():
             await interaction.response.send_message("Ошибка установки канала! (см логи)", ephemeral=False)
 
     # ----------------------------
+    # SLASH: /set_tempvoice (owner only) — установить триггер-канал
+    # ----------------------------
+    @bot.tree.command(name="set_tempvoice", description="Установить voice-канал как триггер для TempVoice (owner only)")
+    async def set_tempvoice(interaction: discord.Interaction, channel: discord.VoiceChannel):
+        if interaction.guild is None:
+            await interaction.response.send_message("Команда только на сервере.", ephemeral=True)
+            return
+
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
+            await interaction.response.send_message("У вас недостаточно прав для этой команды.", ephemeral=True)
+            return
+
+        try:
+            if channel is None:
+                save_tempvoice_trigger(int(interaction.guild.id), 0)
+                await interaction.response.send_message(f"Триггер TempVoice установлен глобально (любое вхождение).", ephemeral=True)
+            else:
+                save_tempvoice_trigger(int(interaction.guild.id), int(channel.id))
+                await interaction.response.send_message(f"Триггер TempVoice установлен: {channel.mention}", ephemeral=True)
+        except Exception as e:
+            logging.exception(f"Ошибка при установке tempvoice триггера: {e}")
+            await interaction.response.send_message("Ошибка при сохранении триггера (см лог).", ephemeral=True)
+
+    @bot.tree.command(name="unset_tempvoicechannel", description="Удалить TempVoice триггер (owner only)")
+    async def unset_tempvoicechannel(interaction: discord.Interaction, channel: discord.VoiceChannel | None = None):
+        if interaction.guild is None:
+            await interaction.response.send_message("Команда только на сервере.", ephemeral=True)
+            return
+
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
+            await interaction.response.send_message("У вас недостаточно прав для этой команды.", ephemeral=True)
+            return
+
+        try:
+            trig_id = int(channel.id) if channel is not None else 0
+            # remove DB record
+            remove_tempvoice_trigger(trig_id)
+            await interaction.response.send_message(f"Триггер TempVoice удалён (id={trig_id}).", ephemeral=True)
+        except Exception as e:
+            logging.exception(f"Ошибка при удалении tempvoice триггера: {e}")
+            await interaction.response.send_message("Ошибка при удалении триггера (см лог).", ephemeral=True)
+
+    # ----------------------------
+    # SLASH: /send_tempvoicepanel (owner only) — отправить панель управления
+    # ----------------------------
+    class TempVoicePanelView(discord.ui.View):
+        def __init__(self, trigger_channel_id: int):
+            super().__init__(timeout=None)
+            self.trigger_channel_id = trigger_channel_id
+
+        @discord.ui.button(label="⚙️ Настройки", style=discord.ButtonStyle.secondary, custom_id="tv_settings")
+        async def settings_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+            # отправим приватное (ephemeral) сообщение с опциями
+            await interaction.response.send_message("Выберите действие настройки (будут применяться к вашему временно созданному каналу):", view=SettingsOptionsView(self.trigger_channel_id), ephemeral=True)
+
+        @discord.ui.button(label="🔐 Права входа", style=discord.ButtonStyle.secondary, custom_id="tv_perms")
+        async def perms_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await interaction.response.send_message("Управление правами входа для TempVoice (ваш канал):", view=PermsOptionsView(self.trigger_channel_id), ephemeral=True)
+
+    class SettingsOptionsView(discord.ui.View):
+        def __init__(self, trigger_channel_id: int):
+            super().__init__(timeout=120)
+            self.trigger_channel_id = trigger_channel_id
+
+        @discord.ui.button(label="✏️ Изменить название", style=discord.ButtonStyle.primary)
+        async def rename(self, interaction: discord.Interaction, button: discord.ui.Button):
+            # Modal для ввода нового имени
+            class RenameModal(discord.ui.Modal, title="✏️ Изменить название канала"):
+                new_name = discord.ui.TextInput(label="Новое имя (max 50)", max_length=50, placeholder="Например: TempVoice Алекс")
+
+                async def on_submit(self_inner, modal_inter: discord.Interaction):
+                    new_name_val = self_inner.new_name.value.strip()
+                    # пытаемся найти temp канал пользователя
+                    rec = get_tempvoice_by_trigger(self.trigger_channel_id)
+                    if not rec:
+                        await modal_inter.response.send_message("Триггер не найден.", ephemeral=True)
+                        return
+                    voice_id = get_temp_channel_for_user(self.trigger_channel_id, modal_inter.user.id)
+                    if not voice_id:
+                        await modal_inter.response.send_message("У вас нет созданного временного канала.", ephemeral=True)
+                        return
+                    guild = modal_inter.guild
+                    try:
+                        ch = guild.get_channel(int(voice_id))
+                        if ch:
+                            await ch.edit(name=new_name_val[:50])
+                            await modal_inter.response.send_message(f"Название канала изменено на: {new_name_val}", ephemeral=True)
+                        else:
+                            await modal_inter.response.send_message("Канал не найден.", ephemeral=True)
+                    except Exception as e:
+                        logging.warning(f"Ошибка при переименовании: {e}")
+                        await modal_inter.response.send_message("Ошибка при переименовании (см лог).", ephemeral=True)
+
+            await interaction.response.send_modal(RenameModal())
+
+        @discord.ui.button(label="👥 Изменить лимит", style=discord.ButtonStyle.primary)
+        async def set_limit(self, interaction: discord.Interaction, button: discord.ui.Button):
+            class LimitModal(discord.ui.Modal, title="Установить лимит пользователей"):
+                limit = discord.ui.TextInput(label="Лимит (0 — без лимита)", placeholder="0", max_length=4)
+
+                async def on_submit(self_inner, modal_inter: discord.Interaction):
+                    try:
+                        val = int(self_inner.limit.value.strip())
+                    except Exception:
+                        await modal_inter.response.send_message("Неправильное число.", ephemeral=True)
+                        return
+                    voice_id = get_temp_channel_for_user(self.trigger_channel_id, modal_inter.user.id)
+                    if not voice_id:
+                        await modal_inter.response.send_message("У вас нет созданного временного канала.", ephemeral=True)
+                        return
+                    ch = modal_inter.guild.get_channel(int(voice_id))
+                    if not ch:
+                        await modal_inter.response.send_message("Канал не найден.", ephemeral=True)
+                        return
+                    try:
+                        await ch.edit(user_limit=val)
+                        await modal_inter.response.send_message(f"Лимит установлен: {val}", ephemeral=True)
+                    except Exception as e:
+                        logging.warning(e)
+                        await modal_inter.response.send_message("Ошибка при установке лимита.", ephemeral=True)
+
+            await interaction.response.send_modal(LimitModal())
+
+        @discord.ui.button(label="🎚️ Изменить битрейт", style=discord.ButtonStyle.primary)
+        async def set_bitrate(self, interaction: discord.Interaction, button: discord.ui.Button):
+            class BitrateModal(discord.ui.Modal, title="Установить битрейт (kbps)"):
+                br = discord.ui.TextInput(label="Битрейт в kbps (например 64)", placeholder="64", max_length=6)
+
+                async def on_submit(self_inner, modal_inter: discord.Interaction):
+                    try:
+                        kb = int(self_inner.br.value.strip())
+                    except Exception:
+                        await modal_inter.response.send_message("Неправильное число.", ephemeral=True)
+                        return
+                    voice_id = get_temp_channel_for_user(self.trigger_channel_id, modal_inter.user.id)
+                    if not voice_id:
+                        await modal_inter.response.send_message("У вас нет созданного временного канала.", ephemeral=True)
+                        return
+                    ch = modal_inter.guild.get_channel(int(voice_id))
+                    if not ch:
+                        await modal_inter.response.send_message("Канал не найден.", ephemeral=True)
+                        return
+                    try:
+                        await ch.edit(bitrate=kb * 1000)
+                        await modal_inter.response.send_message(f"Битрейт установлен: {kb} kbps", ephemeral=True)
+                    except Exception as e:
+                        logging.warning(e)
+                        await modal_inter.response.send_message("Ошибка при установке битрейта.", ephemeral=True)
+
+            await interaction.response.send_modal(BitrateModal())
+
+        @discord.ui.button(label="💬 Вкл/Выкл чат", style=discord.ButtonStyle.secondary)
+        async def toggle_chat(self, interaction: discord.Interaction, button: discord.ui.Button):
+            # переключим chat_enabled в настройках триггера и создадим/удалим текстовый канал
+            rec = get_tempvoice_by_trigger(self.trigger_channel_id)
+            if not rec:
+                await interaction.response.send_message("Триггер не найден.", ephemeral=True)
+                return
+            settings = rec.get("settings") or {}
+            settings["chat_enabled"] = not bool(settings.get("chat_enabled"))
+            update_tempvoice_settings(self.trigger_channel_id, settings)
+            await interaction.response.send_message(f"chat_enabled установлен: {settings['chat_enabled']}", ephemeral=True)
+
+        @discord.ui.button(label="🔒 Заблокировать/Разблокировать", style=discord.ButtonStyle.danger)
+        async def lock_unlock(self, interaction: discord.Interaction, button: discord.ui.Button):
+            rec = get_tempvoice_by_trigger(self.trigger_channel_id)
+            if not rec:
+                await interaction.response.send_message("Триггер не найден.", ephemeral=True)
+                return
+            settings = rec.get("settings") or {}
+            locked_now = not bool(settings.get('locked'))
+            settings['locked'] = locked_now
+
+            # применим к текущему каналу пользователя
+            voice_id = get_temp_channel_for_user(self.trigger_channel_id, interaction.user.id)
+            if voice_id:
+                ch = interaction.guild.get_channel(int(voice_id))
+                if ch:
+                    try:
+                        # получаем map saved_overwrites
+                        saved = settings.get('saved_overwrites') or {}
+                        if locked_now:
+                            # сохраняем текущие overwrites
+                            try:
+                                so = _serialize_overwrites(ch.overwrites)
+                                saved[str(ch.id)] = so
+                                settings['saved_overwrites'] = saved
+                            except Exception:
+                                pass
+                            # строим новые overwrites: блокируем @everyone и разрешаем trusted
+                            new_overwrites = {}
+                            new_overwrites[interaction.guild.default_role] = discord.PermissionOverwrite(connect=False)
+                            for uid in (settings.get('trusted_users') or []):
+                                try:
+                                    m = interaction.guild.get_member(int(uid))
+                                    if m:
+                                        new_overwrites[m] = discord.PermissionOverwrite(connect=True, manage_channels=True)
+                                except Exception:
+                                    continue
+                            try:
+                                await ch.edit(overwrites=new_overwrites)
+                            except Exception as e:
+                                logging.warning(f"Ошибка при установке locked overwrites: {e}")
+                        else:
+                            # разблокировать: восстановим сохранённые overwrites если есть
+                            try:
+                                saved = settings.get('saved_overwrites') or {}
+                                ser = saved.get(str(ch.id))
+                                if ser:
+                                    des = _deserialize_overwrites(ser, interaction.guild)
+                                    await ch.edit(overwrites=des)
+                                    # удалить запись
+                                    try:
+                                        del saved[str(ch.id)]
+                                    except KeyError:
+                                        pass
+                                    settings['saved_overwrites'] = saved
+                                else:
+                                    # нет сохранённых — просто разрешаем подключение
+                                    await ch.set_permissions(interaction.guild.default_role, connect=True)
+                            except Exception as e:
+                                logging.warning(f"Ошибка при восстановлении overwrites: {e}")
+                        update_tempvoice_settings(self.trigger_channel_id, settings)
+                        await interaction.response.send_message(f"locked = {settings['locked']}", ephemeral=True)
+                        return
+                    except Exception as e:
+                        logging.warning(e)
+            else:
+                # нет временного канала у пользователя — просто переключаем флаг
+                update_tempvoice_settings(self.trigger_channel_id, settings)
+                await interaction.response.send_message(f"locked установлено: {settings['locked']}", ephemeral=True)
+
+        @discord.ui.button(label="🚪 Отключить участника", style=discord.ButtonStyle.danger)
+        async def disconnect_member(self, interaction: discord.Interaction, button: discord.ui.Button):
+            class KickModal(discord.ui.Modal, title="🚪 Отключить участника от вашего TempVoice"):
+                member = discord.ui.TextInput(label="Упомяните участника или ID", placeholder="@nick или 123456789012345678")
+
+                async def on_submit(self_inner, modal_inter: discord.Interaction):
+                    raw = self_inner.member.value.strip()
+                    # попытка извлечь ID
+                    m_id = None
+                    try:
+                        if raw.startswith("<@"):
+                            m_id = int(re.sub(r"\D", "", raw))
+                        else:
+                            m_id = int(raw)
+                    except Exception:
+                        await modal_inter.response.send_message("Не удалось распознать ID.", ephemeral=True)
+                        return
+                    guild = modal_inter.guild
+                    member_obj = guild.get_member(m_id) or await guild.fetch_member(m_id)
+                    if not member_obj:
+                        await modal_inter.response.send_message("Участник не найден.", ephemeral=True)
+                        return
+                    voice_id = get_temp_channel_for_user(self.trigger_channel_id, modal_inter.user.id)
+                    if not voice_id:
+                        await modal_inter.response.send_message("У вас нет временного канала.", ephemeral=True)
+                        return
+                    ch = guild.get_channel(int(voice_id))
+                    if not ch:
+                        await modal_inter.response.send_message("Канал не найден.", ephemeral=True)
+                        return
+                    try:
+                        if member_obj.voice and member_obj.voice.channel and member_obj.voice.channel.id == ch.id:
+                            await member_obj.move_to(None)
+                            await modal_inter.response.send_message(f"Участник {member_obj.mention} отключён.", ephemeral=True)
+                        else:
+                            await modal_inter.response.send_message("Участник не в вашем временном канале.", ephemeral=True)
+                    except Exception as e:
+                        logging.warning(e)
+                        await modal_inter.response.send_message("Ошибка при отключении.", ephemeral=True)
+
+            await interaction.response.send_modal(KickModal())
+
+        @discord.ui.button(label="🗑️ Удалить мой канал", style=discord.ButtonStyle.danger)
+        async def delete_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
+            voice_id = get_temp_channel_for_user(self.trigger_channel_id, interaction.user.id)
+            if not voice_id:
+                await interaction.response.send_message("У вас нет созданного временного канала.", ephemeral=True)
+                return
+            ch = interaction.guild.get_channel(int(voice_id))
+            if ch:
+                try:
+                    # удалить связанный текстовый канал, если есть
+                    rec = get_tempvoice_by_trigger(self.trigger_channel_id)
+                    mapping = rec.get('current_map') or {}
+                    entry = mapping.get(str(interaction.user.id)) or {}
+                    text_id = entry.get('text')
+                    if text_id:
+                        t = interaction.guild.get_channel(int(text_id))
+                        if t:
+                            await t.delete()
+                    await ch.delete()
+                    remove_temp_mapping_by_user(self.trigger_channel_id, interaction.user.id)
+                    await interaction.response.send_message("Ваш временный канал удалён.", ephemeral=True)
+                except Exception as e:
+                    logging.warning(e)
+                    await interaction.response.send_message("Ошибка при удалении канала.", ephemeral=True)
+            else:
+                remove_temp_mapping_by_user(self.trigger_channel_id, interaction.user.id)
+                await interaction.response.send_message("Канал не найден, запись удалена.", ephemeral=True)
+
+    class PermsOptionsView(discord.ui.View):
+        def __init__(self, trigger_channel_id: int):
+            super().__init__(timeout=120)
+            self.trigger_channel_id = trigger_channel_id
+
+        async def ask_list_and_update(self, interaction: discord.Interaction, field: str, add: bool = True):
+            # запрашиваем список через modal (комма разделённый список упоминаний или id)
+            class ListModal(discord.ui.Modal, title=f"{'✅ Добавить' if add else '❌ Удалить'} — {field}"):
+                raw = discord.ui.TextInput(label="Список (через запятую) — упоминания или ID", style=discord.TextStyle.long, placeholder="Например: @User, 123456789012345678")
+
+                async def on_submit(self_inner, modal_inter: discord.Interaction):
+                    raw_text = self_inner.raw.value.strip()
+                    ids = []
+                    for part in [p.strip() for p in raw_text.split(',') if p.strip()]:
+                        try:
+                            if part.startswith('<@'):
+                                pid = int(re.sub(r"\D", "", part))
+                            else:
+                                pid = int(part)
+                            ids.append(pid)
+                        except Exception:
+                            continue
+                    rec = get_tempvoice_by_trigger(self.trigger_channel_id)
+                    if not rec:
+                        await modal_inter.response.send_message("Триггер не найден.", ephemeral=True)
+                        return
+                    settings = rec.get('settings') or {}
+                    lst = settings.get(field) or []
+                    if add:
+                        # добавляем
+                        for i in ids:
+                            if i not in lst:
+                                lst.append(i)
+                    else:
+                        for i in ids:
+                            if i in lst:
+                                lst.remove(i)
+                    settings[field] = lst
+                    update_tempvoice_settings(self.trigger_channel_id, settings)
+                    await modal_inter.response.send_message(f"Обновлено поле {field} (count={len(lst)})", ephemeral=True)
+
+            await interaction.response.send_modal(ListModal())
+
+        @discord.ui.button(label="✅ Разрешить пользователей", style=discord.ButtonStyle.primary)
+        async def add_allowed(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await self.ask_list_and_update(interaction, 'allowed_users', add=True)
+
+        @discord.ui.button(label="❌ Убрать разрешения", style=discord.ButtonStyle.secondary)
+        async def remove_allowed(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await self.ask_list_and_update(interaction, 'allowed_users', add=False)
+
+        @discord.ui.button(label="⛔ Заблокировать пользователей", style=discord.ButtonStyle.danger)
+        async def add_blocked(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await self.ask_list_and_update(interaction, 'blocked_users', add=True)
+
+        @discord.ui.button(label="⭐ Добавить доверенных", style=discord.ButtonStyle.success)
+        async def add_trusted(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await self.ask_list_and_update(interaction, 'trusted_users', add=True)
+
+        @discord.ui.button(label="✅ Разрешить роли", style=discord.ButtonStyle.primary)
+        async def add_allowed_roles(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await self.ask_list_and_update_roles(interaction, 'allowed_roles', add=True)
+
+        @discord.ui.button(label="❌ Убрать разрешённые роли", style=discord.ButtonStyle.secondary)
+        async def remove_allowed_roles(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await self.ask_list_and_update_roles(interaction, 'allowed_roles', add=False)
+
+        @discord.ui.button(label="⛔ Заблокировать роли", style=discord.ButtonStyle.danger)
+        async def add_blocked_roles(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await self.ask_list_and_update_roles(interaction, 'blocked_roles', add=True)
+
+        @discord.ui.button(label="❌ Убрать блокированные роли", style=discord.ButtonStyle.secondary)
+        async def remove_blocked_roles(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await self.ask_list_and_update_roles(interaction, 'blocked_roles', add=False)
+
+        async def ask_list_and_update_roles(self, interaction: discord.Interaction, field: str, add: bool = True):
+            class RolesModal(discord.ui.Modal, title=f"{'✅ Добавить' if add else '❌ Удалить'} роли — {field}"):
+                raw = discord.ui.TextInput(label="Список ролей (через запятую) — упоминания или ID", style=discord.TextStyle.long, placeholder="Например: @Role, 123456789012345678")
+
+                async def on_submit(self_inner, modal_inter: discord.Interaction):
+                    raw_text = self_inner.raw.value.strip()
+                    ids = []
+                    for part in [p.strip() for p in raw_text.split(',') if p.strip()]:
+                        try:
+                            if part.startswith('<@&'):
+                                rid = int(re.sub(r"\D", "", part))
+                            else:
+                                rid = int(part)
+                            ids.append(rid)
+                        except Exception:
+                            continue
+                    rec = get_tempvoice_by_trigger(self.trigger_channel_id)
+                    if not rec:
+                        await modal_inter.response.send_message("Триггер не найден.", ephemeral=True)
+                        return
+                    settings = rec.get('settings') or {}
+                    lst = settings.get(field) or []
+                    if add:
+                        for i in ids:
+                            if i not in lst:
+                                lst.append(i)
+                    else:
+                        for i in ids:
+                            if i in lst:
+                                lst.remove(i)
+                    settings[field] = lst
+                    update_tempvoice_settings(self.trigger_channel_id, settings)
+                    await modal_inter.response.send_message(f"Обновлено поле {field} (count={len(lst)})", ephemeral=True)
+
+            await interaction.response.send_modal(RolesModal())
+
+    @bot.tree.command(name="send_tempvoicepanel", description="Отправить панель TempVoice (owner only)")
+    async def send_tempvoicepanel(interaction: discord.Interaction, trigger: discord.VoiceChannel | None, channel: discord.TextChannel | None = None):
+        if interaction.guild is None:
+            await interaction.response.send_message("Только на сервере.", ephemeral=True)
+            return
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
+            await interaction.response.send_message("У вас недостаточно прав.", ephemeral=True)
+            return
+        # support passing trigger or using global trigger (0)
+        rec = None
+        if trigger is not None:
+            rec = get_tempvoice_by_trigger(int(trigger.id))
+        if not rec:
+            # try global
+            rec = get_tempvoice_by_trigger(0)
+        if not rec:
+            await interaction.response.send_message("⚠️ Триггер не настроен. Сначала используйте /set_tempvoice.", ephemeral=True)
+            return
+        target = channel or interaction.channel
+        # удаляем старую панель, если есть
+        old_msg_id = rec.get('panel_message_id')
+        if old_msg_id:
+            try:
+                ch = target
+                old = await ch.fetch_message(old_msg_id)
+                try:
+                    await old.delete()
+                except Exception:
+                    pass
+            except Exception:
+                pass
+        # отправим новую (с эмодзи и более дружелюбным текстом)
+        trig_key = int(trigger.id) if trigger is not None else (rec.get('trigger_channel_id') or 0)
+        view = TempVoicePanelView(int(trig_key))
+        sent = await target.send("🎛️ Панель TempVoice — нажмите кнопки для управления вашим временным каналом.", view=view)
+        set_panel_message_id(int(trig_key), int(sent.id))
+        await interaction.response.send_message("✅ Панель TempVoice отправлена.", ephemeral=True)
+
+    # ----------------------------
     # SLASH: /chemical_reactions reactants
     # ----------------------------
     @bot.tree.command(name="chemical_reactions", description="Анализ и генерация возможных уравнений реакции по списку реагентов (owner only)")
@@ -1511,6 +2196,179 @@ def mainbotstart():
             await interaction.followup.send("Показаны первые 5 вариантов в каждой категории. Уточните запрос для более узкого вывода.", ephemeral=True)
 
         return
+    # ----------------------------
+    # ОБРАБОТКА TEMPVOICE СООБЩЕНИЙ
+    # ----------------------------   
+
+    @bot.event
+    async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        # Игнорировать ботов (включая самого бота)
+        if member.bot:
+            return
+
+        # Пользователь зашёл в канал (или переместился)
+        try:
+            # если вошёл в канал
+            if after.channel is not None and (before.channel is None or before.channel.id != after.channel.id):
+                trig = get_tempvoice_by_trigger(after.channel.id)
+                # try global trigger (0) if specific trigger not found
+                if not trig:
+                    trig = get_tempvoice_by_trigger(0)
+                if trig:
+                    guild = after.channel.guild
+                    # если у пользователя уже есть temp-канал — переместить
+                    existing = get_temp_channel_for_user(after.channel.id, member.id)
+                    if existing:
+                        ch = guild.get_channel(int(existing))
+                        if ch:
+                            try:
+                                await member.move_to(ch)
+                            except Exception:
+                                pass
+                        return
+
+                    trig_key = trig.get('trigger_channel_id') or 0
+                    settings = trig.get('settings') or {}
+                    # merge per-user settings
+                    user_merged = get_user_settings(trig_key, member.id) or {}
+                    final_settings = dict(settings)
+                    final_settings.update(user_merged)
+                    prefix = final_settings.get('prefix', 'TempVoice ')
+                    # формируем название (макс 50 символов)
+                    base_name = f"{prefix}{member.display_name}"[:50]
+                    category = after.channel.category
+
+                    # собираем overwrites
+                    # собираем overwrites с приоритетом: allowed -> blocked -> trusted
+                    overwrites: dict = {}
+                    # по умолчанию разрешаем подключаться всем (будут блокировки ниже при необходимости)
+                    overwrites[guild.default_role] = discord.PermissionOverwrite(connect=True, view_channel=True)
+
+                    # сначала allowed (могут быть позже переопределены blocked)
+                    for rid in (settings.get('allowed_roles') or []):
+                        try:
+                            r = guild.get_role(int(rid))
+                            if r:
+                                overwrites[r] = discord.PermissionOverwrite(connect=True)
+                        except Exception:
+                            continue
+
+                    for uid in (settings.get('allowed_users') or []):
+                        try:
+                            m = guild.get_member(int(uid))
+                            if m:
+                                overwrites[m] = discord.PermissionOverwrite(connect=True)
+                        except Exception:
+                            continue
+
+                    # затем blocked (переопределяют allowed)
+                    for rid in (settings.get('blocked_roles') or []):
+                        try:
+                            r = guild.get_role(int(rid))
+                            if r:
+                                overwrites[r] = discord.PermissionOverwrite(connect=False)
+                        except Exception:
+                            continue
+
+                    for uid in (settings.get('blocked_users') or []):
+                        try:
+                            m = guild.get_member(int(uid))
+                            if m:
+                                overwrites[m] = discord.PermissionOverwrite(connect=False)
+                        except Exception:
+                            continue
+
+                    # trusted — всегда имеют доступ, перебивают блокировки
+                    for uid in (settings.get('trusted_users') or []):
+                        try:
+                            m = guild.get_member(int(uid))
+                            if m:
+                                overwrites[m] = discord.PermissionOverwrite(connect=True, manage_channels=True)
+                        except Exception:
+                            continue
+
+                    # создаём канал
+                    user_limit = int(final_settings.get('user_limit') or 0) or 0
+                    br = final_settings.get('bitrate')
+                    kwargs = {"overwrites": overwrites, "category": category, "user_limit": user_limit}
+                    if br:
+                        try:
+                            kwargs['bitrate'] = int(br)
+                        except Exception:
+                            pass
+
+                    try:
+                        # use per-user settings overrides if exist
+                        # kwargs currently contains overwrites/category/user_limit/bitrate
+                        ch = await guild.create_voice_channel(name=base_name, **kwargs)
+                    except TypeError:
+                        # старые версии discord.py могут не принимать bitrate
+                        kwargs.pop('bitrate', None)
+                        ch = await guild.create_voice_channel(name=base_name, **kwargs)
+
+                    # создавать текстовый канал, если включено
+                    text_ch = None
+                    if settings.get('chat_enabled'):
+                        t_overwrites = {}
+                        t_overwrites[guild.default_role] = discord.PermissionOverwrite(view_channel=False)
+                        # разрешаем доступ владельцу (member) и доверенным
+                        t_overwrites[member] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
+                        for uid in settings.get('trusted_users', []) or []:
+                            try:
+                                m = guild.get_member(int(uid))
+                                if m:
+                                    t_overwrites[m] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
+                            except Exception:
+                                continue
+                        try:
+                            txt_name = f"{base_name}-chat"[:100]
+                            text_ch = await guild.create_text_channel(name=txt_name, overwrites=t_overwrites, category=category)
+                        except Exception:
+                            text_ch = None
+
+                    # сохраняем mapping (и сохраняем текущиe per-user settings пустыми)
+                    trig_key = trig.get('trigger_channel_id') or 0
+                    add_temp_mapping(int(trig_key), member.id, ch.id, text_ch.id if text_ch else None)
+
+                    # пытаемся переместить пользователя
+                    try:
+                        await member.move_to(ch)
+                    except Exception:
+                        pass
+
+            # выход из канала — если ушёл из временного канала, проверить на удаление
+            if before.channel is not None and (after.channel is None or (after.channel is not None and before.channel.id != after.channel.id)):
+                # проверяем все триггеры сервера
+                for rec in get_tempvoice_by_guild(member.guild.id):
+                    mapping = rec.get('current_map') or {}
+                    # если before.channel.id — один из temp каналов
+                    for k, v in list(mapping.items()):
+                        if v.get('voice') == (before.channel.id if before.channel else None):
+                            # если канал пуст — удалить и очистить запись
+                            vc = member.guild.get_channel(int(v.get('voice')))
+                            if vc:
+                                if len(vc.members) == 0:
+                                    # удаляем связанный текст канал если есть
+                                    tid = v.get('text')
+                                    try:
+                                        if tid:
+                                            t = member.guild.get_channel(int(tid))
+                                            if t:
+                                                await t.delete()
+                                    except Exception:
+                                        pass
+                                    try:
+                                        await vc.delete()
+                                    except Exception:
+                                        pass
+                                    # удалить маппинг
+                                    remove_temp_mapping_by_voice(rec.get('trigger_channel_id'), int(v.get('voice')))
+                            else:
+                                # канал не найден — удаляем запись
+                                remove_temp_mapping_by_voice(rec.get('trigger_channel_id'), int(v.get('voice')))
+        except Exception as e:
+            logging.exception(f"Ошибка в on_voice_state_update (tempvoice): {e}")
+
 
     # ----------------------------
     # ОБРАБОТКА ОСТАЛЬНЫХ СООБЩЕНИЙ
