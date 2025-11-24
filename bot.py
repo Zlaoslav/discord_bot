@@ -1843,7 +1843,12 @@ def mainbotstart():
             settings = rec.get("settings") or {}
             settings["chat_enabled"] = not bool(settings.get("chat_enabled"))
             update_tempvoice_settings(self.trigger_channel_id, settings)
-            await interaction.response.send_message(f"chat_enabled установлен: {settings['chat_enabled']}", ephemeral=True)
+            # Сообщаем пользователю и даём инструкцию по встроенному чату (эпхемерно, без ЛС)
+            await interaction.response.send_message(
+                f"💬 Встроенный чат: {settings['chat_enabled']}.\n"
+                "Чтобы изменить права встроенного чата: откройте настройки канала в Discord → Permissions.",
+                ephemeral=True,
+            )
 
         @discord.ui.button(label="🔒 Заблокировать/Разблокировать", style=discord.ButtonStyle.danger)
         async def lock_unlock(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1963,26 +1968,42 @@ def mainbotstart():
                 await interaction.response.send_message("У вас нет созданного временного канала.", ephemeral=True)
                 return
             ch = interaction.guild.get_channel(int(voice_id))
-            if ch:
-                try:
-                    # удалить связанный текстовый канал, если есть
-                    rec = get_tempvoice_by_trigger(self.trigger_channel_id)
-                    mapping = rec.get('current_map') or {}
-                    entry = mapping.get(str(interaction.user.id)) or {}
-                    text_id = entry.get('text')
-                    if text_id:
-                        t = interaction.guild.get_channel(int(text_id))
-                        if t:
-                            await t.delete()
-                    await ch.delete()
-                    remove_temp_mapping_by_user(self.trigger_channel_id, interaction.user.id)
-                    await interaction.response.send_message("Ваш временный канал удалён.", ephemeral=True)
-                except Exception as e:
-                    logging.warning(e)
-                    await interaction.response.send_message("Ошибка при удалении канала.", ephemeral=True)
-            else:
+            if not ch:
                 remove_temp_mapping_by_user(self.trigger_channel_id, interaction.user.id)
                 await interaction.response.send_message("Канал не найден, запись удалена.", ephemeral=True)
+                return
+            # Показываем подтверждение (ephemeral) с кнопками
+            class ConfirmDeleteView(discord.ui.View):
+                def __init__(self, voice_channel, trig_id, user_id):
+                    super().__init__(timeout=60)
+                    self.voice_channel = voice_channel
+                    self.trig_id = trig_id
+                    self.user_id = user_id
+
+                @discord.ui.button(label="Да, удалить 🗑️", style=discord.ButtonStyle.danger)
+                async def confirm(self, i: discord.Interaction, b: discord.ui.Button):
+                    # Только владелец кнопки может подтвердить
+                    if i.user.id != interaction.user.id:
+                        await i.response.send_message("Это подтверждение не для вас.", ephemeral=True)
+                        return
+                    try:
+                        if self.voice_channel:
+                            await self.voice_channel.delete()
+                        remove_temp_mapping_by_user(self.trig_id, self.user_id)
+                        await i.response.edit_message(content="Ваш временный канал удалён.", view=None)
+                    except Exception as e:
+                        logging.warning(e)
+                        await i.response.edit_message(content="Ошибка при удалении канала.", view=None)
+
+                @discord.ui.button(label="Отмена", style=discord.ButtonStyle.secondary)
+                async def cancel(self, i: discord.Interaction, b: discord.ui.Button):
+                    if i.user.id != interaction.user.id:
+                        await i.response.send_message("Это действие не для вас.", ephemeral=True)
+                        return
+                    await i.response.edit_message(content="Удаление отменено.", view=None)
+
+            view = ConfirmDeleteView(ch, self.trigger_channel_id, interaction.user.id)
+            await interaction.response.send_message("Подтвердите удаление вашего временного канала:", view=view, ephemeral=True)
 
     class PermsOptionsView(discord.ui.View):
         def __init__(self, trigger_channel_id: int):
@@ -1990,30 +2011,23 @@ def mainbotstart():
             self.trigger_channel_id = trigger_channel_id
 
         async def ask_list_and_update(self, interaction: discord.Interaction, field: str, add: bool = True):
-            # запрашиваем список через modal (комма разделённый список упоминаний или id)
-            class ListModal(discord.ui.Modal, title=f"{'✅ Добавить' if add else '❌ Удалить'} — {field}"):
-                raw = discord.ui.TextInput(label="Список (через запятую) — упоминания или ID", style=discord.TextStyle.long, placeholder="Например: @User, 123456789012345678")
+            # Показываем ephemeral сообщение с UserSelect для выбора пользователей
+            class UsersSelect(discord.ui.UserSelect):
+                def __init__(self, trig_id, field_name, add_flag):
+                    super().__init__(placeholder="Выберите пользователей...", min_values=1, max_values=25)
+                    self.trig_id = trig_id
+                    self.field_name = field_name
+                    self.add_flag = add_flag
 
-                async def on_submit(self_inner, modal_inter: discord.Interaction):
-                    raw_text = self_inner.raw.value.strip()
-                    ids = []
-                    for part in [p.strip() for p in raw_text.split(',') if p.strip()]:
-                        try:
-                            if part.startswith('<@'):
-                                pid = int(re.sub(r"\D", "", part))
-                            else:
-                                pid = int(part)
-                            ids.append(pid)
-                        except Exception:
-                            continue
-                    rec = get_tempvoice_by_trigger(self.trigger_channel_id)
+                async def callback(self, select_inter: discord.Interaction):
+                    ids = [u.id for u in self.values]
+                    rec = get_tempvoice_by_trigger(self.trig_id)
                     if not rec:
-                        await modal_inter.response.send_message("Триггер не найден.", ephemeral=True)
+                        await select_inter.response.send_message("⚠️ Триггер не найден.", ephemeral=True)
                         return
                     settings = rec.get('settings') or {}
-                    lst = settings.get(field) or []
-                    if add:
-                        # добавляем
+                    lst = settings.get(self.field_name) or []
+                    if self.add_flag:
                         for i in ids:
                             if i not in lst:
                                 lst.append(i)
@@ -2021,11 +2035,13 @@ def mainbotstart():
                         for i in ids:
                             if i in lst:
                                 lst.remove(i)
-                    settings[field] = lst
-                    update_tempvoice_settings(self.trigger_channel_id, settings)
-                    await modal_inter.response.send_message(f"Обновлено поле {field} (count={len(lst)})", ephemeral=True)
+                    settings[self.field_name] = lst
+                    update_tempvoice_settings(self.trig_id, settings)
+                    await select_inter.response.edit_message(content=f"✅ Обновлено поле {self.field_name} (count={len(lst)})", view=None, ephemeral=True)
 
-            await interaction.response.send_modal(ListModal())
+            view = discord.ui.View(timeout=60)
+            view.add_item(UsersSelect(self.trigger_channel_id, field, add))
+            await interaction.response.send_message(f"Выберите пользователей для `{field}`:", view=view, ephemeral=True)
 
         @discord.ui.button(label="✅ Разрешить пользователей", style=discord.ButtonStyle.primary)
         async def add_allowed(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2060,28 +2076,23 @@ def mainbotstart():
             await self.ask_list_and_update_roles(interaction, 'blocked_roles', add=False)
 
         async def ask_list_and_update_roles(self, interaction: discord.Interaction, field: str, add: bool = True):
-            class RolesModal(discord.ui.Modal, title=f"{'✅ Добавить' if add else '❌ Удалить'} роли — {field}"):
-                raw = discord.ui.TextInput(label="Список ролей (через запятую) — упоминания или ID", style=discord.TextStyle.long, placeholder="Например: @Role, 123456789012345678")
+            # Показываем эпхемерный RoleSelect для выбора ролей
+            class RolesSelect(discord.ui.RoleSelect):
+                def __init__(self, trig_id, field_name, add_flag):
+                    super().__init__(placeholder="Выберите роли...", min_values=1, max_values=25)
+                    self.trig_id = trig_id
+                    self.field_name = field_name
+                    self.add_flag = add_flag
 
-                async def on_submit(self_inner, modal_inter: discord.Interaction):
-                    raw_text = self_inner.raw.value.strip()
-                    ids = []
-                    for part in [p.strip() for p in raw_text.split(',') if p.strip()]:
-                        try:
-                            if part.startswith('<@&'):
-                                rid = int(re.sub(r"\D", "", part))
-                            else:
-                                rid = int(part)
-                            ids.append(rid)
-                        except Exception:
-                            continue
-                    rec = get_tempvoice_by_trigger(self.trigger_channel_id)
+                async def callback(self, select_inter: discord.Interaction):
+                    ids = [r.id for r in self.values]
+                    rec = get_tempvoice_by_trigger(self.trig_id)
                     if not rec:
-                        await modal_inter.response.send_message("Триггер не найден.", ephemeral=True)
+                        await select_inter.response.send_message("⚠️ Триггер не найден.", ephemeral=True)
                         return
                     settings = rec.get('settings') or {}
-                    lst = settings.get(field) or []
-                    if add:
+                    lst = settings.get(self.field_name) or []
+                    if self.add_flag:
                         for i in ids:
                             if i not in lst:
                                 lst.append(i)
@@ -2089,11 +2100,13 @@ def mainbotstart():
                         for i in ids:
                             if i in lst:
                                 lst.remove(i)
-                    settings[field] = lst
-                    update_tempvoice_settings(self.trigger_channel_id, settings)
-                    await modal_inter.response.send_message(f"Обновлено поле {field} (count={len(lst)})", ephemeral=True)
+                    settings[self.field_name] = lst
+                    update_tempvoice_settings(self.trig_id, settings)
+                    await select_inter.response.edit_message(content=f"✅ Обновлено поле {self.field_name} (count={len(lst)})", view=None, ephemeral=True)
 
-            await interaction.response.send_modal(RolesModal())
+            view = discord.ui.View(timeout=60)
+            view.add_item(RolesSelect(self.trigger_channel_id, field, add))
+            await interaction.response.send_message(f"Выберите роли для `{field}`:", view=view, ephemeral=True)
 
     @bot.tree.command(name="send_tempvoicepanel", description="Отправить панель TempVoice (owner only)")
     async def send_tempvoicepanel(interaction: discord.Interaction, trigger: discord.VoiceChannel | None, channel: discord.TextChannel | None = None):
@@ -2306,29 +2319,10 @@ def mainbotstart():
                         kwargs.pop('bitrate', None)
                         ch = await guild.create_voice_channel(name=base_name, **kwargs)
 
-                    # создавать текстовый канал, если включено
-                    text_ch = None
-                    if settings.get('chat_enabled'):
-                        t_overwrites = {}
-                        t_overwrites[guild.default_role] = discord.PermissionOverwrite(view_channel=False)
-                        # разрешаем доступ владельцу (member) и доверенным
-                        t_overwrites[member] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
-                        for uid in settings.get('trusted_users', []) or []:
-                            try:
-                                m = guild.get_member(int(uid))
-                                if m:
-                                    t_overwrites[m] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
-                            except Exception:
-                                continue
-                        try:
-                            txt_name = f"{base_name}-chat"[:100]
-                            text_ch = await guild.create_text_channel(name=txt_name, overwrites=t_overwrites, category=category)
-                        except Exception:
-                            text_ch = None
-
-                    # сохраняем mapping (и сохраняем текущиe per-user settings пустыми)
+                    # Не создаём отдельный текстовый канал — используем встроенный связанный чат голосового канала.
+                    # Сохраняем mapping (текстовый канал не применяется)
                     trig_key = trig.get('trigger_channel_id') or 0
-                    add_temp_mapping(int(trig_key), member.id, ch.id, text_ch.id if text_ch else None)
+                    add_temp_mapping(int(trig_key), member.id, ch.id, None)
 
                     # пытаемся переместить пользователя
                     try:
@@ -2348,15 +2342,6 @@ def mainbotstart():
                             vc = member.guild.get_channel(int(v.get('voice')))
                             if vc:
                                 if len(vc.members) == 0:
-                                    # удаляем связанный текст канал если есть
-                                    tid = v.get('text')
-                                    try:
-                                        if tid:
-                                            t = member.guild.get_channel(int(tid))
-                                            if t:
-                                                await t.delete()
-                                    except Exception:
-                                        pass
                                     try:
                                         await vc.delete()
                                     except Exception:
@@ -2376,21 +2361,6 @@ def mainbotstart():
     async def on_sus_message(message):
         if message.author.bot:
             return
-        if "<@1409084528588488727>" in message.content.lower():
-            # reply автоматически упомянет автора (mention_author=True по умолчанию)
-            await message.reply(r"https://tenor.com/view/fuck-you-gif-27037587", mention_author=True, delete_after=10)
-
-        if "осуждаю" in message.content.lower():
-            await message.reply(r"https://tenor.com/view/%D1%81%D1%82%D0%B8%D0%BD%D1%82-%D1%81%D1%82%D0%B8%D0%BD%D1%82%D0%B8%D0%BA-stint-stintik-%D0%B8%D1%81%D0%BF%D1%83%D0%B3%D0%B0%D0%BB%D1%81%D1%8F-gif-8740975965519379714", mention_author=True, delete_after=15)
-
-        if r"||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​" in message.content.lower():
-            await message.reply(r"https://tenor.com/view/ghost-ping-troll-discord-gif-20744771", mention_author=True)
-        
-        if "@everyone" in message.content.lower():
-            await message.reply(r"https://tenor.com/view/everyone-discord-konosuba-gif-21395141", mention_author=True, delete_after=15)
-        
-        if "@here" in message.content.lower():
-            await message.reply(r"https://tenor.com/view/everyone-discord-gif-18237159", mention_author=True, delete_after=15)
         
         if "да" == message.content.lower():
             if random.randint(1, 50) == 1:
