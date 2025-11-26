@@ -10,7 +10,6 @@ import json
 import logging
 import socket
 import time
-import quran
 
 import discord
 from discord.ext import commands
@@ -1725,13 +1724,6 @@ def mainbotstart():
             logging.exception(f"Ошибка при удалении tempvoice триггера: {e}")
             await interaction.response.send_message("Ошибка при удалении триггера (см лог).", ephemeral=True)
 
-    # ----------------------------
-    # SLASH: /is_haram [message]  проверка на харам
-    # ----------------------------
-
-    @bot.tree.command(name="is_haram", description="Проверка на харам")
-    async def is_haram(interaction: discord.Interaction, message: str):
-        await interaction.response.send_message(f"{message} {quran.chekHaram(message)}")
     # ----------------------------
     # SLASH: /send_tempvoicepanel (owner only) — отправить панель управления
     # ----------------------------
