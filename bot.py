@@ -212,7 +212,16 @@ def ask_gemini(msg):
     response = gemini_client.models.generate_content(
     model="gemini-2.5-flash", contents=msg
     )
-    return response
+    
+    text = getattr(response, "text", None)
+    if not text:
+        # fallback: иногда структура response.output[0].content[0].text
+        try:
+            text = response.output[0].content[0].text
+        except Exception:
+            text = str(response)
+
+    return text
 
 # ------------------ BD setup ------------------
 
