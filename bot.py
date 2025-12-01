@@ -25,6 +25,7 @@ from playwright.async_api import async_playwright
 import configs_folder.perms_manager as perms_manager
 import chem_reactions 
 
+from google import genai
 
 # ------------------ main vars setup ------------------
 SCRIPT_DIR = Path(__file__).parent
@@ -92,7 +93,8 @@ with open(SETINGS_PATH, "r", encoding="utf-8") as f:
 DISCORD_TOKEN = config_setings["DISCORD_TOKEN"]
 GUILD_ID = config_setings["GUILD_ID"]
 PELLA_EMAIL = config_setings["PELLA_EMAIL"]
-PELLA_PASSWORD = config_setings["PELLA_PASSWORD"]
+PELLA_PASSWORD = config_setings["PELLA_PASSWORD"] 
+os.environ["GEMINI_API_KEY"] = config_setings["GEMINI_TOKEN"]
 
 intents = discord.Intents.default()
 intents.members = True          # нужен для работы с Member объектами
@@ -204,6 +206,13 @@ class SoundView(View):
 
 # ------------------ gemini setup ------------------
 
+gemini_client = genai.Client()
+
+def ask_gemini(msg):
+    response = gemini_client.models.generate_content(
+    model="gemini-2.5-flash", contents=msg
+    )
+    return response
 
 # ------------------ BD setup ------------------
 
@@ -1407,8 +1416,11 @@ def mainbotstart():
             await interaction.followup.send("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logging.debug(f"{interaction.user.name} try use askgpt")
             return
-        
-        await interaction.followup.send("Я в россии, увы без гемини", ephemeral=False)
+        try:
+            response = ask_gemini(usermessage)
+            await interaction.followup.send(response, ephemeral=False)
+        except Exception:
+            await interaction.followup.send("УВЫ ОШИБКА", ephemeral=False)
     
     # ----------------------------
     # SLASH: /stopsound
