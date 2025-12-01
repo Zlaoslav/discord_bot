@@ -109,7 +109,7 @@ COUNTER_TOLERANCE = 0.4  # допустимое отклонение у counting
 OWNER_ID = 727105264486187090
 
 # лимит запросов в день на пользователя
-DAILY_REQUEST_LIMIT = 25
+DAILY_REQUEST_LIMIT = 50
 
 # Инициализация системы прав
 perms_manager.init_perms(OWNER_ID)
@@ -1549,8 +1549,8 @@ def mainbotstart():
             for chunk in chunks:
                 if chunk.strip():  # Пропускаем пустые чанки
                     await interaction.followup.send(chunk, ephemeral=False)
-        except Exception:
-            await interaction.followup.send("УВЫ ОШИБКА", ephemeral=False)
+        except Exception as e:
+            await interaction.followup.send(f"Erorr: {e}", ephemeral=False)
     
     # ----------------------------
     # SLASH: /stopsound
