@@ -1056,6 +1056,11 @@ async def quickrestart_process(interaction_or_ctx=None):
 
 # ------------------ bot commands ------------------
 def mainbotstart():
+    # Удаляем встроенную команду help, чтобы не было конфликта при регистрации своей
+    try:
+        bot.remove_command('help')
+    except Exception:
+        pass
 
     # ----------------------------
     # ПРЕФИКС-КОМАНДА (пример)
