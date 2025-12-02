@@ -1580,12 +1580,12 @@ def mainbotstart():
             
             # Разбиваем ответ на сообщения по 1900 символов (максимум 5 сообщений)
             chunk_size = 1900
-            max_chunks = 5
+            max_chunks = 20
             chunks = [response[i:i+chunk_size] for i in range(0, len(response), chunk_size)][:max_chunks]
             
             for chunk in chunks:
                 if chunk.strip():  # Пропускаем пустые чанки
-                    await interaction.followup.send(chunk, ephemeral=False)
+                    await interaction.followup.send(f"```\n{chunk}\n```", ephemeral=False)
         except Exception as e:
             await interaction.followup.send(f"Erorr: {e}", ephemeral=False)
     
