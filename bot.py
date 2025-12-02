@@ -1585,7 +1585,7 @@ def mainbotstart():
             
             for chunk in chunks:
                 if chunk.strip():  # Пропускаем пустые чанки
-                    await interaction.followup.send(f"```\n{chunk}\n```", ephemeral=False)
+                    await interaction.followup.send(f"```markdown\n{chunk}\n```", ephemeral=False)
         except Exception as e:
             await interaction.followup.send(f"Erorr: {e}", ephemeral=False)
     
