@@ -1585,6 +1585,7 @@ def mainbotstart():
             chunks = [response[i:i+chunk_size] for i in range(0, len(response), chunk_size)][:max_chunks]
             
             for chunk in chunks:
+                chunk = chunk.replace("```", "")
                 if chunk.strip():  # Пропускаем пустые чанки
                     await interaction.followup.send(f"```markdown\n{chunk}\n```", ephemeral=False)
         except Exception as e:
