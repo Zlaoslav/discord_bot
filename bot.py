@@ -93,8 +93,6 @@ with open(SETINGS_PATH, "r", encoding="utf-8") as f:
 
 DISCORD_TOKEN = config_setings["DISCORD_TOKEN"]
 GUILD_ID = config_setings["GUILD_ID"]
-PELLA_EMAIL = config_setings["PELLA_EMAIL"]
-PELLA_PASSWORD = config_setings["PELLA_PASSWORD"] 
 os.environ["GEMINI_API_KEY"] = config_setings["GEMINI_TOKEN"]
 
 intents = discord.Intents.default()
