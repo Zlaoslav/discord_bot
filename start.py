@@ -171,7 +171,7 @@ def console_handler(event):
                  win32con.CTRL_SHUTDOWN_EVENT):
         uptime = int(time.time() - starttime)
         if is_waiting:
-            send_status(f"```diff\n- {USERNAME} Now Can't Start, vunknown\n```", thread_id=MAIN_THREAD_ID)
+            send_status(f"```diff\n- {USERNAME} Now Can't Start\n```", thread_id=MAIN_THREAD_ID)
         else:
             send_status(f"```diff\n- Shutdown, UpTime {format_duration(uptime)} By {USERNAME}\n```", thread_id=MAIN_THREAD_ID)
         release_local_lock()
@@ -302,7 +302,7 @@ def lock_is_recent(ts_iso: str, max_age_seconds=90):
 async def claim_lock(channel):
     global claimed_message_id, heartbeat_task
     ts = datetime.now(timezone.utc).isoformat()
-    m = await channel.send(f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{ts}|vunknown")
+    m = await channel.send(f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{ts}")
     claimed_message_id = m.id
 
     # also notify via lock webhook (separate webhook for lock notifications)
@@ -318,9 +318,9 @@ async def claim_lock(channel):
                 await asyncio.sleep(30)
                 ts2 = datetime.now(timezone.utc).isoformat()
                 try:
-                    await m.edit(content=f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{ts2}|vunknown")
+                    await m.edit(content=f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{ts2}")
                 except discord.NotFound:
-                    m = await channel.send(f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{ts2}|vunknown")
+                    m = await channel.send(f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{ts2}")
                     global claimed_message_id
                     claimed_message_id = m.id
         except asyncio.CancelledError:
