@@ -39,7 +39,7 @@ with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
 DISCORD_TOKEN = config.get("DISCORD_TOKEN")
 STATUS_WEBHOOK_URL = config.get("STATUS_WEBHOOK_URL") or config.get("STATUS_WEBHOOK")
 # Code version (can be overridden in config)
-CODEVERSION = "1.4.7"
+CODEVERSION = "1.4.8"
 # Lock-related configuration: separate bot token and channel id (no webhook for lock)
 LOCK_BOT_TOKEN = config.get("LOCK_BOT_TOKEN")
 LOCK_CHANNEL_ID = int(config.get("LOCK_CHANNEL_ID")) if config.get("LOCK_CHANNEL_ID") else None
@@ -435,7 +435,12 @@ async def wait_for_remote_release(channel):
                 is_waiting = False
                 return True
             parsed = parse_lock_content(last.content)
-            if not parsed or not lock_is_recent(parsed.get("ts")):
+            if not parsed:
+                is_waiting = False
+                return True
+            # Check if lock is stale (no heartbeat for > 90 seconds)
+            if not lock_is_recent(parsed.get("ts"), max_age_seconds=90):
+                print("[INFO] Lock is stale (no heartbeat for >90s); claiming lock...")
                 is_waiting = False
                 return True
             if not sent_can_start:
@@ -444,7 +449,7 @@ async def wait_for_remote_release(channel):
             if not sent_version_alert and parsed.get("version") != f"v{CODEVERSION}":
                 send_status(f"# ALERT outdated version detected! < @&1424904999212814469 ><@727105264486187090> __v{CODEVERSION}≠{parsed.get("version")}__\ndebug info: me:{USERNAME}|{HOSTNAME}|none|**v{CODEVERSION}**, parsed message: {parsed}", thread_id=MAIN_THREAD_ID)
                 sent_version_alert = True
-            await asyncio.sleep(60)
+            await asyncio.sleep(15)
     finally:
         is_waiting = False
 
