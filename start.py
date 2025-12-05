@@ -39,7 +39,7 @@ with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
 DISCORD_TOKEN = config.get("DISCORD_TOKEN")
 STATUS_WEBHOOK_URL = config.get("STATUS_WEBHOOK_URL") or config.get("STATUS_WEBHOOK")
 # Code version (can be overridden in config)
-CODEVERSION = "1.4.6"
+CODEVERSION = "1.4.7"
 # Lock-related configuration: separate bot token and channel id (no webhook for lock)
 LOCK_BOT_TOKEN = config.get("LOCK_BOT_TOKEN")
 LOCK_CHANNEL_ID = int(config.get("LOCK_CHANNEL_ID")) if config.get("LOCK_CHANNEL_ID") else None
@@ -221,6 +221,7 @@ def format_duration(seconds: int) -> str:
 
 is_waiting = False
 sent_can_start = False
+sent_version_alert = False
 
 
 def console_handler(event):
@@ -423,9 +424,10 @@ async def release_remote_lock(channel):
 
 
 async def wait_for_remote_release(channel):
-    global is_waiting, sent_can_start
+    global is_waiting, sent_can_start, sent_version_alert
     is_waiting = True
     sent_can_start = False
+    sent_version_alert = False
     try:
         while True:
             last = await get_last_lock_message(channel)
@@ -439,8 +441,9 @@ async def wait_for_remote_release(channel):
             if not sent_can_start:
                 send_status(f"```diff\n+ Can Start By {USERNAME}\n```", thread_id=MAIN_THREAD_ID)
                 sent_can_start = True
-                if parsed.get("version") != f"v{CODEVERSION}":
-                    send_status(f"# ALERT outdated version detected! < @&1424904999212814469 ><@727105264486187090> __v{CODEVERSION}__\ndebug info: me:{USERNAME}|{HOSTNAME}|none|**v{CODEVERSION}**, parsed message: {parsed}", thread_id=MAIN_THREAD_ID)
+            if not sent_version_alert and parsed.get("version") != f"v{CODEVERSION}":
+                send_status(f"# ALERT outdated version detected! < @&1424904999212814469 ><@727105264486187090> __v{CODEVERSION}≠{parsed.get("version")}__\ndebug info: me:{USERNAME}|{HOSTNAME}|none|**v{CODEVERSION}**, parsed message: {parsed}", thread_id=MAIN_THREAD_ID)
+                sent_version_alert = True
             await asyncio.sleep(60)
     finally:
         is_waiting = False
