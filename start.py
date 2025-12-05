@@ -3,16 +3,24 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-import shutil
 import time
 import os
 import tempfile
 import socket
 import requests
-import msvcrt
-import win32api
-import win32con
+import platform
 from datetime import datetime, timezone
+
+# Platform-specific imports
+IS_WINDOWS = platform.system() == "Windows"
+if IS_WINDOWS:
+    try:
+        import msvcrt
+        import win32api
+        import win32con
+    except ImportError:
+        print("[WARN] Windows-specific modules not available; lock features may be limited")
+        IS_WINDOWS = False
 
 CURRENT_DIR = Path(__file__).parent.resolve()
 BOT_FILE = CURRENT_DIR / "bot.py"
@@ -29,8 +37,7 @@ with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
 
 DISCORD_TOKEN = config.get("DISCORD_TOKEN")
 STATUS_WEBHOOK_URL = config.get("STATUS_WEBHOOK_URL") or config.get("STATUS_WEBHOOK")
-# Lock-related configuration: separate webhook, bot token and channel id (no threads)
-LOCK_WEBHOOK_URL = config.get("LOCK_WEBHOOK_URL")
+# Lock-related configuration: separate bot token and channel id (no webhook for lock)
 LOCK_BOT_TOKEN = config.get("LOCK_BOT_TOKEN")
 LOCK_CHANNEL_ID = int(config.get("LOCK_CHANNEL_ID")) if config.get("LOCK_CHANNEL_ID") else None
 MAIN_THREAD_ID = None
@@ -91,16 +98,6 @@ def send_status(msg: str, thread_id: int = None):
         print("send_status error:", e)
 
 
-def send_lock(msg: str):
-    """Send lock-related notification via lock webhook (if configured)."""
-    if not LOCK_WEBHOOK_URL:
-        return
-    try:
-        requests.post(LOCK_WEBHOOK_URL, json={"content": msg}, timeout=5)
-    except Exception as e:
-        print("send_lock error:", e)
-
-
 # ------------------- Local lock (from main.py) -------------------
 LOCK_PREFIX = "LOCK|"
 _local_lock_path = os.path.join(tempfile.gettempdir(), f"master_lock_{USERNAME}.lock")
@@ -109,6 +106,25 @@ _local_lock_fh = None
 
 def acquire_local_lock() -> bool:
     global _local_lock_fh
+    if not IS_WINDOWS:
+        # На Linux/macOS используем простую файловую блокировку
+        try:
+            fh = open(_local_lock_path, "w")
+            import fcntl
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            _local_lock_fh = fh
+            fh.write(f"{os.getpid()}\n{time.time()}\n")
+            fh.flush()
+            return True
+        except (IOError, BlockingIOError) as e:
+            print(f"acquire_local_lock error (fcntl): {e}")
+            try:
+                fh.close()
+            except:
+                pass
+            return False
+    
+    # Windows: используем msvcrt
     try:
         fh = open(_local_lock_path, "a+b")
         try:
@@ -135,10 +151,18 @@ def release_local_lock():
     global _local_lock_fh
     try:
         if _local_lock_fh:
-            try:
-                msvcrt.locking(_local_lock_fh.fileno(), msvcrt.LK_UNLCK, 1)
-            except:
-                pass
+            if IS_WINDOWS:
+                try:
+                    msvcrt.locking(_local_lock_fh.fileno(), msvcrt.LK_UNLCK, 1)
+                except:
+                    pass
+            else:
+                # Linux/macOS: fcntl unlock
+                try:
+                    import fcntl
+                    fcntl.flock(_local_lock_fh.fileno(), fcntl.LOCK_UN)
+                except:
+                    pass
             try:
                 _local_lock_fh.close()
             except:
@@ -166,21 +190,24 @@ is_waiting = False
 
 def console_handler(event):
     global is_waiting
-    if event in (win32con.CTRL_C_EVENT, win32con.CTRL_BREAK_EVENT,
-                 win32con.CTRL_CLOSE_EVENT, win32con.CTRL_LOGOFF_EVENT,
-                 win32con.CTRL_SHUTDOWN_EVENT):
-        uptime = int(time.time() - starttime)
-        if is_waiting:
-            send_status(f"```diff\n- {USERNAME} Now Can't Start\n```", thread_id=MAIN_THREAD_ID)
-        else:
-            send_status(f"```diff\n- Shutdown, UpTime {format_duration(uptime)} By {USERNAME}\n```", thread_id=MAIN_THREAD_ID)
-        release_local_lock()
-        os._exit(0)
+    if IS_WINDOWS:
+        if event in (win32con.CTRL_C_EVENT, win32con.CTRL_BREAK_EVENT,
+                     win32con.CTRL_CLOSE_EVENT, win32con.CTRL_LOGOFF_EVENT,
+                     win32con.CTRL_SHUTDOWN_EVENT):
+            uptime = int(time.time() - starttime)
+            if is_waiting:
+                send_status(f"```diff\n- {USERNAME} Now Can't Start\n```", thread_id=MAIN_THREAD_ID)
+            else:
+                send_status(f"```diff\n- Shutdown, UpTime {format_duration(uptime)} By {USERNAME}\n```", thread_id=MAIN_THREAD_ID)
+            release_local_lock()
+            os._exit(0)
+        return True
     return True
 
 
 try:
-    win32api.SetConsoleCtrlHandler(console_handler, True)
+    if IS_WINDOWS:
+        win32api.SetConsoleCtrlHandler(console_handler, True)
 except Exception as e:
     print("SetConsoleCtrlHandler failed:", e)
 
@@ -305,12 +332,6 @@ async def claim_lock(channel):
     m = await channel.send(f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{ts}")
     claimed_message_id = m.id
 
-    # also notify via lock webhook (separate webhook for lock notifications)
-    try:
-        send_lock(m.content)
-    except Exception:
-        pass
-
     async def heartbeat():
         nonlocal m
         try:
@@ -398,10 +419,6 @@ async def startup_sequence():
         # No lock channel configured; just claim local lock and start
         asyncio.create_task(run_main_job())
         return
-
-    lock_channel = await client.fetch_channel(LOCK_CHANNEL_ID)
-
-    lock_channel = await client.fetch_channel(LOCK_CHANNEL_ID)
 
     lock_channel = await client.fetch_channel(LOCK_CHANNEL_ID)
 
