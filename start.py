@@ -10,6 +10,7 @@ import socket
 import requests
 import platform
 from datetime import datetime, timezone
+import uuid
 
 # Platform-specific imports
 IS_WINDOWS = platform.system() == "Windows"
@@ -102,12 +103,37 @@ def send_status(msg: str, thread_id: int = None):
 LOCK_PREFIX = "LOCK|"
 _local_lock_path = os.path.join(tempfile.gettempdir(), f"master_lock_{USERNAME}.lock")
 _local_lock_fh = None
+_local_lock_socket = None
+LOCK_SOCKET_PORT = int(config.get("LOCK_SOCKET_PORT")) if config.get("LOCK_SOCKET_PORT") else 50001
 
 
 def acquire_local_lock() -> bool:
     global _local_lock_fh
+    global _local_lock_socket
+    # Primary mechanism: try to bind a localhost TCP port. If bind succeeds,
+    # we assume this instance is the sole owner and keep the socket open.
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind(("127.0.0.1", LOCK_SOCKET_PORT))
+        s.listen(1)
+        _local_lock_socket = s
+        # Also write pid/timestamp to a lock file for diagnostics
+        try:
+            fh = open(_local_lock_path, "w")
+            fh.write(f"{os.getpid()}\n{time.time()}\n")
+            fh.flush()
+            _local_lock_fh = fh
+        except Exception:
+            # non-fatal: socket lock is primary
+            _local_lock_fh = None
+        return True
+    except OSError:
+        # Port already in use — likely another instance. Fall back to file lock.
+        pass
+
+    # Fallback: file locking (POSIX or Windows)
     if not IS_WINDOWS:
-        # На Linux/macOS используем простую файловую блокировку
         try:
             fh = open(_local_lock_path, "w")
             import fcntl
@@ -117,14 +143,13 @@ def acquire_local_lock() -> bool:
             fh.flush()
             return True
         except (IOError, BlockingIOError) as e:
-            print(f"acquire_local_lock error (fcntl): {e}")
             try:
                 fh.close()
             except:
                 pass
             return False
-    
-    # Windows: используем msvcrt
+
+    # Windows fallback using msvcrt
     try:
         fh = open(_local_lock_path, "a+b")
         try:
@@ -139,7 +164,6 @@ def acquire_local_lock() -> bool:
         fh.flush()
         return True
     except Exception as e:
-        print("acquire_local_lock error:", e)
         try:
             fh.close()
         except:
@@ -168,6 +192,14 @@ def release_local_lock():
             except:
                 pass
             _local_lock_fh = None
+        # close socket lock if present
+        global _local_lock_socket
+        if '_local_lock_socket' in globals() and _local_lock_socket:
+            try:
+                _local_lock_socket.close()
+            except:
+                pass
+            _local_lock_socket = None
         if os.path.exists(_local_lock_path):
             try:
                 os.remove(_local_lock_path)
@@ -299,6 +331,7 @@ client = discord.Client(intents=intents)
 
 claimed_message_id = None
 heartbeat_task = None
+INSTANCE_ID = str(uuid.uuid4())[:8]
 
 
 async def get_last_lock_message(channel):
@@ -311,6 +344,13 @@ async def get_last_lock_message(channel):
 def parse_lock_content(content: str):
     try:
         parts = content.split("|")
+        # New format: LOCK|username|hostname|pid|instance_id|ts|version?
+        if len(parts) >= 6:
+            parsed = {"username": parts[1], "hostname": parts[2], "pid": parts[3], "instance": parts[4], "ts": parts[5]}
+            if len(parts) >= 7:
+                parsed["version"] = parts[6]
+            return parsed
+        # Old format (compat): LOCK|username|hostname|ts|version
         if len(parts) >= 5:
             return {"username": parts[1], "hostname": parts[2], "ts": parts[3], "version": parts[4]}
     except:
@@ -329,7 +369,8 @@ def lock_is_recent(ts_iso: str, max_age_seconds=90):
 async def claim_lock(channel):
     global claimed_message_id, heartbeat_task
     ts = datetime.now(timezone.utc).isoformat()
-    m = await channel.send(f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{ts}")
+    pid = os.getpid()
+    m = await channel.send(f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{pid}|{INSTANCE_ID}|{ts}")
     claimed_message_id = m.id
 
     async def heartbeat():
@@ -339,9 +380,9 @@ async def claim_lock(channel):
                 await asyncio.sleep(30)
                 ts2 = datetime.now(timezone.utc).isoformat()
                 try:
-                    await m.edit(content=f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{ts2}")
+                    await m.edit(content=f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{pid}|{INSTANCE_ID}|{ts2}")
                 except discord.NotFound:
-                    m = await channel.send(f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{ts2}")
+                    m = await channel.send(f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{pid}|{INSTANCE_ID}|{ts2}")
                     global claimed_message_id
                     claimed_message_id = m.id
         except asyncio.CancelledError:
