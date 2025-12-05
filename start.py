@@ -39,7 +39,7 @@ with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
 DISCORD_TOKEN = config.get("DISCORD_TOKEN")
 STATUS_WEBHOOK_URL = config.get("STATUS_WEBHOOK_URL") or config.get("STATUS_WEBHOOK")
 # Code version (can be overridden in config)
-CODEVERSION = "1.4.5"
+CODEVERSION = "1.4.6"
 # Lock-related configuration: separate bot token and channel id (no webhook for lock)
 LOCK_BOT_TOKEN = config.get("LOCK_BOT_TOKEN")
 LOCK_CHANNEL_ID = int(config.get("LOCK_CHANNEL_ID")) if config.get("LOCK_CHANNEL_ID") else None
@@ -383,9 +383,9 @@ async def claim_lock(channel):
                 await asyncio.sleep(30)
                 ts2 = datetime.now(timezone.utc).isoformat()
                 try:
-                    await m.edit(content=f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{pid}|{INSTANCE_ID}|{ts2}")
+                    await m.edit(content=f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{pid}|{INSTANCE_ID}|{ts2}|v{CODEVERSION}")
                 except discord.NotFound:
-                    m = await channel.send(f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{pid}|{INSTANCE_ID}|{ts2}")
+                    m = await channel.send(f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{pid}|{INSTANCE_ID}|{ts2}|v{CODEVERSION}")
                     global claimed_message_id
                     claimed_message_id = m.id
         except asyncio.CancelledError:
