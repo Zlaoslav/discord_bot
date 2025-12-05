@@ -1,3 +1,5 @@
+CODEVERSION = "1.4.9"
+
 import asyncio
 import json
 import subprocess
@@ -38,8 +40,7 @@ with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
 
 DISCORD_TOKEN = config.get("DISCORD_TOKEN")
 STATUS_WEBHOOK_URL = config.get("STATUS_WEBHOOK_URL") or config.get("STATUS_WEBHOOK")
-# Code version (can be overridden in config)
-CODEVERSION = "1.4.8"
+
 # Lock-related configuration: separate bot token and channel id (no webhook for lock)
 LOCK_BOT_TOKEN = config.get("LOCK_BOT_TOKEN")
 LOCK_CHANNEL_ID = int(config.get("LOCK_CHANNEL_ID")) if config.get("LOCK_CHANNEL_ID") else None
@@ -295,6 +296,7 @@ def run_bot_loop():
                 pass
             print("[INFO] Бот выключен. Завершение работы.")
             send_status(f"```diff\n- Shutdown requested by {USERNAME}\n```", thread_id=MAIN_THREAD_ID)
+            os._exit(0)
             return
 
         print("[INFO] Запуск бота...")
