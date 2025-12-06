@@ -2045,9 +2045,12 @@ def mainbotstart():
             settings["chat_enabled"] = not bool(settings.get("chat_enabled"))
             update_tempvoice_settings(self.trigger_channel_id, settings)
             # Сообщаем пользователю и даём инструкцию по встроенному чату (эпхемерно, без ЛС)
+            overwrite = interaction.channel.overwrites_for(interaction.user)
+            overwrite.send_messages = settings["chat_enabled"]
+            overwrite.send_messages_in_threads = settings["chat_enabled"]
+            await interaction.channel.set_permissions(interaction.user, overwrite=overwrite)
             await interaction.response.send_message(
-                f"💬 Встроенный чат: {settings['chat_enabled']}.\n"
-                "Чтобы изменить права встроенного чата: откройте настройки канала в Discord → Permissions.",
+                f"💬 Встроенный чат: {settings['chat_enabled']}.",
                 ephemeral=True,
             )
 
