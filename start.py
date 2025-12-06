@@ -281,6 +281,10 @@ def run_bot_loop():
             except Exception as e:
                 print(f"[WARNING] Ошибка при обновлении: {e}")
                 send_status(f"```diff\n- Update failed: {e}\n```", thread_id=MAIN_THREAD_ID)
+        elif is_quick_restart:
+            send_status(f"```diff\n- Quick Restarting bot by {USERNAME}\n```", thread_id=MAIN_THREAD_ID)
+        elif is_shutdown:
+            send_status(f"```diff\n- Shutdown requested by {USERNAME}\n```", thread_id=MAIN_THREAD_ID)
 
         if is_quick_restart:
             try:
