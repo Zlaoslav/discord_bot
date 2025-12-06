@@ -86,6 +86,54 @@ def backup_and_write(path: Path, data: bytes) -> Path:
         # проброс ошибки наружу — вызывающий обработает логирование
         raise
 
+# ------------------- Git/pip helpers -------------------
+def git_update():
+    git_dir = CURRENT_DIR / ".git"
+    # Helper to try resetting to one of candidate branches
+    def try_reset(candidates: list[str]) -> bool:
+        for c in candidates:
+            try:
+                run_command(["git", "-C", str(CURRENT_DIR), "reset", "--hard", f"origin/{c}"])
+                print(f"[INFO] Reset to origin/{c} succeeded")
+                return True
+            except subprocess.CalledProcessError:
+                continue
+        return False
+
+    if git_dir.exists():
+        print("[INFO] Репозиторий найден, обновляем...")
+        try:
+            run_command(["git", "-C", str(CURRENT_DIR), "fetch", "--all"])
+        except subprocess.CalledProcessError as e:
+            print(f"[WARNING] git fetch failed: {e}")
+            return False
+
+        # Попробуем определить ветку по-умолчанию у origin и сделать reset
+        branch = detect_origin_default_branch(CURRENT_DIR) or "main"
+        if try_reset([branch, "main", "master"]):
+            print("[INFO] Репозиторий обновлен!")
+            return True
+        else:
+            print("[WARNING] Не удалось сделать 'git reset' к origin/<branch> — пропускаем обновление файлов.")
+            return False
+    else:
+        print("[INFO] Инициализация нового репозитория...")
+        try:
+            run_command(["git", "init"])
+            run_command(["git", "remote", "add", "origin", REPO_URL])
+            run_command(["git", "fetch", "origin"])
+        except subprocess.CalledProcessError as e:
+            print(f"[WARNING] Ошибка при инициализации/фетче репозитория: {e}")
+            return False
+
+        branch = detect_origin_default_branch(CURRENT_DIR) or "main"
+        if try_reset([branch, "main", "master"]):
+            print("[INFO] Репозиторий инициализирован и обновлён!")
+            return True
+        else:
+            print("[WARNING] Не удалось сделать 'git reset' после инициализации репозитория.")
+            return False
+
 def maybe_update_self():
     # Новая логика: проверяем ВСЕ отслеживаемые git-файлы в репозитории.
     # Если найдена любая обновлённая версия — перезаписываем файлы локально и
@@ -150,6 +198,7 @@ def maybe_update_self():
 if __name__ == "__main__":
     try:
         updated = maybe_update_self()
+        git_update()
         # если обновление произошло, process будет перезапущен (execv) и до сюда выполнение не вернётся.
     except Exception as e:
         sys.stderr.write(f"Ошибка автообновления: {e}\n")
@@ -223,53 +272,7 @@ def run_command(cmd, show_output=True):
         raise subprocess.CalledProcessError(process.returncode, cmd)
 
 
-# ------------------- Git/pip helpers -------------------
-def git_update():
-    git_dir = CURRENT_DIR / ".git"
-    # Helper to try resetting to one of candidate branches
-    def try_reset(candidates: list[str]) -> bool:
-        for c in candidates:
-            try:
-                run_command(["git", "-C", str(CURRENT_DIR), "reset", "--hard", f"origin/{c}"])
-                print(f"[INFO] Reset to origin/{c} succeeded")
-                return True
-            except subprocess.CalledProcessError:
-                continue
-        return False
 
-    if git_dir.exists():
-        print("[INFO] Репозиторий найден, обновляем...")
-        try:
-            run_command(["git", "-C", str(CURRENT_DIR), "fetch", "--all"])
-        except subprocess.CalledProcessError as e:
-            print(f"[WARNING] git fetch failed: {e}")
-            return False
-
-        # Попробуем определить ветку по-умолчанию у origin и сделать reset
-        branch = detect_origin_default_branch(CURRENT_DIR) or "main"
-        if try_reset([branch, "main", "master"]):
-            print("[INFO] Репозиторий обновлен!")
-            return True
-        else:
-            print("[WARNING] Не удалось сделать 'git reset' к origin/<branch> — пропускаем обновление файлов.")
-            return False
-    else:
-        print("[INFO] Инициализация нового репозитория...")
-        try:
-            run_command(["git", "init"])
-            run_command(["git", "remote", "add", "origin", REPO_URL])
-            run_command(["git", "fetch", "origin"])
-        except subprocess.CalledProcessError as e:
-            print(f"[WARNING] Ошибка при инициализации/фетче репозитория: {e}")
-            return False
-
-        branch = detect_origin_default_branch(CURRENT_DIR) or "main"
-        if try_reset([branch, "main", "master"]):
-            print("[INFO] Репозиторий инициализирован и обновлён!")
-            return True
-        else:
-            print("[WARNING] Не удалось сделать 'git reset' после инициализации репозитория.")
-            return False
 
 
 def install_requirements():
@@ -488,6 +491,7 @@ def run_bot_loop():
 
                 try:
                     maybe_update_self()
+                    git_update()
                 except Exception as e:
                     print(e)
                 if original_bytes is not None and new_bytes is not None and original_bytes != new_bytes:
