@@ -87,21 +87,18 @@ def backup_and_write(path: Path, data: bytes) -> Path:
         raise
 
 def maybe_update_self():
-    # Определяем путь к текущему файлу (поддерживает замороженные пакеты? нет, только .py)
+    # Новая логика: проверяем ВСЕ отслеживаемые git-файлы в репозитории.
+    # Если найдена любая обновлённая версия — перезаписываем файлы локально и
+    # перезапускаем `start.py` один раз, чтобы применились все изменения.
     if getattr(sys, "frozen", False):
-        # "frozen" (pyinstaller) — не поддерживаем автообновление исполнимого
         return False
 
     this_path = Path(__file__).resolve()
     repo_root = find_git_root(this_path.parent)
     if not repo_root:
-        # не в git репозитории
         return False
 
-    # относительный путь внутри репо
-    relpath = os.path.relpath(this_path, repo_root).replace(os.path.sep, "/")
-
-    # обновляем remote refs
+    # Обновим remote refs один раз
     if not fetch_origin(repo_root):
         return False
 
@@ -109,44 +106,45 @@ def maybe_update_self():
     if not branch:
         return False
 
-    remote_bytes = get_remote_file_bytes(repo_root, branch, relpath)
-    if remote_bytes is None:
-        # файл не найден в удалённой ветке
+    # Получим список отслеживаемых файлов
+    try:
+        cp = run_cmd("git", "-C", str(repo_root), "ls-files", cwd=repo_root)
+        files = cp.stdout.decode().splitlines()
+    except subprocess.CalledProcessError:
         return False
 
-    try:
-        local_bytes = this_path.read_bytes()
-    except Exception:
-        local_bytes = b""
-
-    if local_bytes == remote_bytes:
-        # уже актуален
-        return False
-
-    # если разные — перезапишем файл и перезапустим процесс
-    try:
-        # Перезаписываем `start.py` напрямую (беков не делаем)
+    any_changed = False
+    for rel in files:
+        # Пропускаем пустые
+        if not rel or rel.startswith(".git"):
+            continue
+        remote = get_remote_file_bytes(repo_root, branch, rel)
+        if remote is None:
+            # файл может отсутствовать в origin — пропускаем
+            continue
+        local_path = repo_root / rel
         try:
-            backup_and_write(this_path, remote_bytes)
-        except Exception as e:
-            sys.stderr.write(f"Ошибка при записи новой версии {this_path}: {e}\n")
-            return False
+            local = local_path.read_bytes()
+        except Exception:
+            local = b""
+        if local != remote:
+            try:
+                backup_and_write(local_path, remote)
+                any_changed = True
+            except Exception as e:
+                sys.stderr.write(f"Ошибка при записи {local_path}: {e}\n")
+                # продолжаем пытаться обновить другие файлы
+                continue
 
+    if any_changed:
         try:
-            sys.stderr.write(f"Обновлён файл {this_path}\n")
+            sys.stderr.write("Обнаружены и применены обновления из origin; перезапуск...\n")
         except Exception:
             pass
-
-        # перезапускаем процесс, заменяя текущий процесс (не создаём дочерний)
         python_exe = sys.executable
         args = [python_exe, str(this_path)] + sys.argv[1:]
-        os.execv(python_exe, args)  # never returns on success
-    except Exception as e:
-        try:
-            sys.stderr.write(f"Ошибка при перезапуске после обновления: {e}\n")
-        except Exception:
-            pass
-        return False
+        os.execv(python_exe, args)
+    return False
 
 
 if __name__ == "__main__":
@@ -478,7 +476,8 @@ def run_bot_loop():
                 except Exception:
                     original_bytes = None
 
-                git_update()
+                # Обновление репозитория выполняется единожды при старте (если нужно).
+                # Здесь только гарантируем установку зависимостей.
                 install_requirements()
 
                 # Если файл на диске изменился — перезапустим текущий процесс
@@ -772,8 +771,7 @@ async def on_ready():
 
 if __name__ == "__main__":
     try:
-        # Первичное обновление и установка зависимостей
-        git_update()
+        # Устанавливаем зависимости (pip) один раз перед запуском.
         install_requirements()
         # Запускаем lock-client (отдельный бот) — он запустит фоновый цикл для bot.py
         token_to_run = LOCK_BOT_TOKEN or DISCORD_TOKEN
