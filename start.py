@@ -1,3 +1,151 @@
+from __future__ import annotations
+import os
+import sys
+import subprocess
+import tempfile
+import time
+from pathlib import Path
+from typing import Optional
+
+def find_git_root(start: Path) -> Optional[Path]:
+    cur = start.resolve()
+    for _ in range(100):
+        if (cur / ".git").exists():
+            return cur
+        if cur.parent == cur:
+            return None
+        cur = cur.parent
+    return None
+
+def run_cmd(*args, cwd: Optional[Path] = None, check: bool = True, capture: bool = True) -> subprocess.CompletedProcess:
+    return subprocess.run(list(map(str, args)), cwd=str(cwd) if cwd else None,
+                          stdout=subprocess.PIPE if capture else None,
+                          stderr=subprocess.PIPE if capture else None,
+                          check=check)
+
+def detect_origin_default_branch(repo_root: Path) -> Optional[str]:
+    """
+    Попытки определить ветку по-умолчанию у origin.
+    Возвращает имя ветки без префикса origin/, например 'main' или 'master'
+    """
+    try:
+        # Результат обычно: "origin/main" — оставляем часть после "/"
+        cp = run_cmd("git", "rev-parse", "--abbrev-ref", "origin/HEAD", cwd=repo_root)
+        text = cp.stdout.decode().strip()
+        if "/" in text:
+            return text.split("/", 1)[1]
+        # fallback: try common names
+    except subprocess.CalledProcessError:
+        pass
+
+    # Попробуем проверить, существует ли origin/main или origin/master
+    for candidate in ("main", "master"):
+        try:
+            run_cmd("git", "rev-parse", f"origin/{candidate}", cwd=repo_root)
+            return candidate
+        except subprocess.CalledProcessError:
+            continue
+    return None
+
+def fetch_origin(repo_root: Path) -> bool:
+    try:
+        # fetch only origin to be conservative
+        run_cmd("git", "fetch", "origin", "--quiet", cwd=repo_root)
+        return True
+    except subprocess.CalledProcessError as e:
+        # fetch failed (network/auth); оставляем сообщение и продолжаем без обновления
+        sys.stderr.write(f"git fetch failed: {e}\n")
+        return False
+
+def get_remote_file_bytes(repo_root: Path, branch: str, relpath: str) -> Optional[bytes]:
+    # git show origin/branch:relpath
+    object_ref = f"origin/{branch}:{relpath}"
+    try:
+        cp = run_cmd("git", "show", object_ref, cwd=repo_root)
+        return cp.stdout
+    except subprocess.CalledProcessError:
+        return None
+
+def backup_and_write(path: Path, data: bytes) -> Path:
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    backup = path.parent / f"{path.name}.backup_{ts}"
+    # резервная копия
+    path.replace(backup)  # atomically rename current file to backup
+    # записываем новую версию
+    path.write_bytes(data)
+    # сохраняем права (чтобы вернуть исполняемый флаг если нужно)
+    try:
+        # если бэкап был исполняемым — восстановим права
+        st = backup.stat()
+        path.chmod(st.st_mode)
+    except Exception:
+        pass
+    return backup
+
+def maybe_update_self():
+    # Определяем путь к текущему файлу (поддерживает замороженные пакеты? нет, только .py)
+    if getattr(sys, "frozen", False):
+        # "frozen" (pyinstaller) — не поддерживаем автообновление исполнимого
+        return False
+
+    this_path = Path(__file__).resolve()
+    repo_root = find_git_root(this_path.parent)
+    if not repo_root:
+        # не в git репозитории
+        return False
+
+    # относительный путь внутри репо
+    relpath = os.path.relpath(this_path, repo_root).replace(os.path.sep, "/")
+
+    # обновляем remote refs
+    if not fetch_origin(repo_root):
+        return False
+
+    branch = detect_origin_default_branch(repo_root)
+    if not branch:
+        return False
+
+    remote_bytes = get_remote_file_bytes(repo_root, branch, relpath)
+    if remote_bytes is None:
+        # файл не найден в удалённой ветке
+        return False
+
+    try:
+        local_bytes = this_path.read_bytes()
+    except Exception:
+        local_bytes = b""
+
+    if local_bytes == remote_bytes:
+        # уже актуален
+        return False
+
+    # если разные — сделаем резервную копию и заменим
+    try:
+        backup = backup_and_write(this_path, remote_bytes)
+        sys.stderr.write(f"Обновлён файл {this_path} (резервная копия: {backup})\n")
+    except Exception as e:
+        sys.stderr.write(f"Ошибка при записи обновлённого файла: {e}\n")
+        return False
+
+    # перезапускаем процесс, заменяя текущий процесс (не создаём дочерний)
+    python_exe = sys.executable
+    args = [python_exe, str(this_path)] + sys.argv[1:]
+    os.execv(python_exe, args)  # never returns on success
+
+
+if __name__ == "__main__":
+    try:
+        updated = maybe_update_self()
+        # если обновление произошло, process будет перезапущен (execv) и до сюда выполнение не вернётся.
+    except Exception as e:
+        sys.stderr.write(f"Ошибка автообновления: {e}\n")
+else:
+    os._exit(1)
+    
+
+
+
+# ------------------ startup ------------------
 import asyncio
 import json
 import subprocess
