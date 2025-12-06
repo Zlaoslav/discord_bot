@@ -418,11 +418,31 @@ def run_bot_loop():
         is_shutdown = shutdown_flag.exists()
 
         # Перед рестартом — при полном рестарте делаем git update/install
+        # и если сам `start.py` был обновлён — перезапускаем супервизор.
         if not first_run and not is_quick_restart and not is_shutdown:
             send_status(f"```diff\n- Restarting bot by {USERNAME}\n```", thread_id=MAIN_THREAD_ID)
             try:
+                this_path = Path(__file__).resolve()
+                try:
+                    original_bytes = this_path.read_bytes()
+                except Exception:
+                    original_bytes = None
+
                 git_update()
                 install_requirements()
+
+                # Если файл на диске изменился — перезапустим текущий процесс
+                try:
+                    new_bytes = this_path.read_bytes()
+                except Exception:
+                    new_bytes = None
+
+                if original_bytes is not None and new_bytes is not None and original_bytes != new_bytes:
+                    print(f"[INFO] Файл {this_path} обновлён на диске; перезапуск супервизора.")
+                    send_status(f"```diff\n- Supervisor updated; restarting {USERNAME}\n```", thread_id=MAIN_THREAD_ID)
+                    python_exe = sys.executable
+                    args = [python_exe, str(this_path)] + sys.argv[1:]
+                    os.execv(python_exe, args)  # не возвращается при успехе
             except Exception as e:
                 print(f"[WARNING] Ошибка при обновлении: {e}")
                 send_status(f"```diff\n- Update failed: {e}\n```", thread_id=MAIN_THREAD_ID)
