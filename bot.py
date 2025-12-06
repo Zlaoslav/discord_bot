@@ -590,6 +590,27 @@ def get_tempvoice_by_guild(guild_id: int) -> list[dict]:
         out.append({"id": tid, "guild_id": guild_id, "trigger_channel_id": trig_id, "panel_message_id": panel_id, "settings": settings, "current_map": current_map})
     return out
 
+def get_all_tempvoices() -> list[dict]:
+    """Return all tempvoice records as list of dicts."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("SELECT id, guild_id, trigger_channel_id, panel_message_id, settings, current_map FROM tempvoice")
+    rows = cur.fetchall()
+    conn.close()
+    out = []
+    for row in rows:
+        tid, guild_id, trig_id, panel_id, settings_json, map_json = row
+        try:
+            settings = json.loads(settings_json or "{}")
+        except Exception:
+            settings = {}
+        try:
+            current_map = json.loads(map_json or "{}")
+        except Exception:
+            current_map = {}
+        out.append({"id": tid, "guild_id": guild_id, "trigger_channel_id": trig_id, "panel_message_id": panel_id, "settings": settings, "current_map": current_map})
+    return out
+
 def update_tempvoice_settings(trigger_channel_id: int, settings: dict) -> None:
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -2775,6 +2796,23 @@ def mainbotstart():
 
 
         logging.info(f"✅ Ready: {bot.user}")
+
+        # Регистрируем persistent Views для TempVoice панелей, чтобы
+        # кнопки на уже отправленных сообщениях продолжали работать
+        try:
+            # Регистрируем для всех записей из БД, используя guild_id и panel_message_id
+            recs = get_all_tempvoices()
+            for rec in (recs or []):
+                panel_id = rec.get('panel_message_id')
+                trig = rec.get('trigger_channel_id') or 0
+                if panel_id:
+                    try:
+                        bot.add_view(TempVoicePanelView(int(trig)), message_id=int(panel_id))
+                        logging.debug(f"Registered TempVoice view for message {panel_id} (trigger={trig}, guild={rec.get('guild_id')})")
+                    except Exception as e:
+                        logging.warning(f"Не удалось зарегистрировать TempVoice view для message {panel_id}: {e}")
+        except Exception as e:
+            logging.warning(f"Ошибка при регистрации TempVoice views: {e}")
 
     bot.run(DISCORD_TOKEN)
 
