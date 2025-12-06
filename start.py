@@ -486,6 +486,10 @@ def run_bot_loop():
                 except Exception:
                     new_bytes = None
 
+                try:
+                    maybe_update_self()
+                except Exception as e:
+                    print(e)
                 if original_bytes is not None and new_bytes is not None and original_bytes != new_bytes:
                     print(f"[INFO] Файл {this_path} обновлён на диске; перезапуск супервизора.")
                     send_status(f"```diff\n- Supervisor updated; restarting {USERNAME}\n```", thread_id=MAIN_THREAD_ID)
