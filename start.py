@@ -121,8 +121,7 @@ def maybe_update_self():
 
     # если разные — сделаем резервную копию и заменим
     try:
-        backup = backup_and_write(this_path, remote_bytes)
-        sys.stderr.write(f"Обновлён файл {this_path} (резервная копия: {backup})\n")
+        sys.stderr.write(f"Обновлён файл {this_path}\n")
     except Exception as e:
         sys.stderr.write(f"Ошибка при записи обновлённого файла: {e}\n")
         return False
