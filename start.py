@@ -8,6 +8,10 @@ from pathlib import Path
 from typing import Optional
 
 CURRENT_DIR = Path(__file__).parent.resolve()
+BOT_FILE = CURRENT_DIR / "bot.py"
+REPO_URL = "https://github.com/Zlaoslav/discord_bot"
+REQUIREMENTS = CURRENT_DIR / "requirements.txt"
+
 def find_git_root(start: Path) -> Optional[Path]:
     cur = start.resolve()
     for _ in range(100):
@@ -245,10 +249,6 @@ if IS_WINDOWS:
         print("[WARN] Windows-specific modules not available; lock features may be limited")
         IS_WINDOWS = False
 
-
-BOT_FILE = CURRENT_DIR / "bot.py"
-REPO_URL = "https://github.com/Zlaoslav/discord_bot"
-REQUIREMENTS = CURRENT_DIR / "requirements.txt"
 
 # Load config
 CONFIGS_FOLDER = CURRENT_DIR / "configs_folder"
