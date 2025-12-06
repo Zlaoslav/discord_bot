@@ -378,7 +378,11 @@ async def claim_lock(channel):
     global claimed_message_id, heartbeat_task
     ts = datetime.now(timezone.utc).isoformat()
     pid = os.getpid()
-    m = await channel.send(f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{pid}|{INSTANCE_ID}|{ts}")
+    try:
+        from version import CODEVERSION
+    except:
+        CODEVERSION = "vunknown"
+    m = await channel.send(f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{pid}|{INSTANCE_ID}|{ts}|v{CODEVERSION}")
     claimed_message_id = m.id
 
     async def heartbeat():
