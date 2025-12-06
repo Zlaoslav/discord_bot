@@ -18,6 +18,17 @@ def find_git_root(start: Path) -> Optional[Path]:
         cur = cur.parent
     return None
 
+# ------------------- Функция для выполнения команды с прогрессом -------------------
+def run_command(cmd, show_output=True):
+    print(f"[CMD] {' '.join(cmd)}")
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    for line in process.stdout:
+        if show_output:
+            print(f". {line.strip()}")
+    process.wait()
+    if process.returncode != 0:
+        raise subprocess.CalledProcessError(process.returncode, cmd)
+    
 def run_cmd(*args, cwd: Optional[Path] = None, check: bool = True, capture: bool = True) -> subprocess.CompletedProcess:
     return subprocess.run(list(map(str, args)), cwd=str(cwd) if cwd else None,
                           stdout=subprocess.PIPE if capture else None,
@@ -260,16 +271,7 @@ HOSTNAME = socket.gethostname()
 starttime = time.time()
 
 
-# ------------------- Функция для выполнения команды с прогрессом -------------------
-def run_command(cmd, show_output=True):
-    print(f"[CMD] {' '.join(cmd)}")
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    for line in process.stdout:
-        if show_output:
-            print(f". {line.strip()}")
-    process.wait()
-    if process.returncode != 0:
-        raise subprocess.CalledProcessError(process.returncode, cmd)
+
 
 
 
