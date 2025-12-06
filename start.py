@@ -1,5 +1,4 @@
-CODEVERSION = "1.4.9"
-
+from version import CODEVERSION
 import asyncio
 import json
 import subprocess
