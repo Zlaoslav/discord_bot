@@ -2037,6 +2037,14 @@ def mainbotstart():
         @discord.ui.button(label="💬 Вкл/Выкл чат", style=discord.ButtonStyle.secondary)
         async def toggle_chat(self, interaction: discord.Interaction, button: discord.ui.Button):
             # переключим chat_enabled в настройках триггера и создадим/удалим текстовый канал
+            voice_id = get_temp_channel_for_user(self.trigger_channel_id, interaction.user.id)
+            if not voice_id:
+                await interaction.response.send_message("У вас нет созданного временного канала.", ephemeral=True)
+                return
+            ch = interaction.guild.get_channel(int(voice_id))
+            if not ch:
+                await interaction.response.send_message("Канал не найден.", ephemeral=True)
+                return
             rec = get_tempvoice_by_trigger(self.trigger_channel_id)
             if not rec:
                 await interaction.response.send_message("Триггер не найден.", ephemeral=True)
@@ -2045,10 +2053,10 @@ def mainbotstart():
             settings["chat_enabled"] = not bool(settings.get("chat_enabled"))
             update_tempvoice_settings(self.trigger_channel_id, settings)
             # Сообщаем пользователю и даём инструкцию по встроенному чату (эпхемерно, без ЛС)
-            overwrite = interaction.channel.overwrites_for(interaction.user)
+            overwrite = ch.overwrites_for(interaction.user)
             overwrite.send_messages = settings["chat_enabled"]
             overwrite.send_messages_in_threads = settings["chat_enabled"]
-            await interaction.channel.set_permissions(interaction.user, overwrite=overwrite)
+            await ch.set_permissions(interaction.user, overwrite=overwrite)
             await interaction.response.send_message(
                 f"💬 Встроенный чат: {settings['chat_enabled']}.",
                 ephemeral=True,
