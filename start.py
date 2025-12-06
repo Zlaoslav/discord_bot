@@ -67,20 +67,24 @@ def get_remote_file_bytes(repo_root: Path, branch: str, relpath: str) -> Optiona
         return None
 
 def backup_and_write(path: Path, data: bytes) -> Path:
-    ts = time.strftime("%Y%m%d-%H%M%S")
-    backup = path.parent / f"{path.name}.backup_{ts}"
-    # резервная копия
-    path.replace(backup)  # atomically rename current file to backup
-    # записываем новую версию
-    path.write_bytes(data)
-    # сохраняем права (чтобы вернуть исполняемый флаг если нужно)
+    # Раньше здесь создавался бэкап старой версии файла.
+    # Теперь непосредственно перезаписываем файл без создания бэкапа.
+    # Сохраняем попытку сохранить прежние права (если возможно) — читаем их до записи.
     try:
-        # если бэкап был исполняемым — восстановим права
-        st = backup.stat()
-        path.chmod(st.st_mode)
+        try:
+            old_mode = path.stat().st_mode
+        except Exception:
+            old_mode = None
+        path.write_bytes(data)
+        if old_mode is not None:
+            try:
+                path.chmod(old_mode)
+            except Exception:
+                pass
+        return path
     except Exception:
-        pass
-    return backup
+        # проброс ошибки наружу — вызывающий обработает логирование
+        raise
 
 def maybe_update_self():
     # Определяем путь к текущему файлу (поддерживает замороженные пакеты? нет, только .py)
@@ -119,17 +123,30 @@ def maybe_update_self():
         # уже актуален
         return False
 
-    # если разные — сделаем резервную копию и заменим
+    # если разные — перезапишем файл и перезапустим процесс
     try:
-        sys.stderr.write(f"Обновлён файл {this_path}\n")
-    except Exception as e:
-        sys.stderr.write(f"Ошибка при записи обновлённого файла: {e}\n")
-        return False
+        # Перезаписываем `start.py` напрямую (беков не делаем)
+        try:
+            backup_and_write(this_path, remote_bytes)
+        except Exception as e:
+            sys.stderr.write(f"Ошибка при записи новой версии {this_path}: {e}\n")
+            return False
 
-    # перезапускаем процесс, заменяя текущий процесс (не создаём дочерний)
-    python_exe = sys.executable
-    args = [python_exe, str(this_path)] + sys.argv[1:]
-    os.execv(python_exe, args)  # never returns on success
+        try:
+            sys.stderr.write(f"Обновлён файл {this_path}\n")
+        except Exception:
+            pass
+
+        # перезапускаем процесс, заменяя текущий процесс (не создаём дочерний)
+        python_exe = sys.executable
+        args = [python_exe, str(this_path)] + sys.argv[1:]
+        os.execv(python_exe, args)  # never returns on success
+    except Exception as e:
+        try:
+            sys.stderr.write(f"Ошибка при перезапуске после обновления: {e}\n")
+        except Exception:
+            pass
+        return False
 
 
 if __name__ == "__main__":
