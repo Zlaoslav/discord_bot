@@ -1,4 +1,3 @@
-from version import CODEVERSION
 import asyncio
 import json
 import subprocess
@@ -389,6 +388,10 @@ async def claim_lock(channel):
                 await asyncio.sleep(30)
                 ts2 = datetime.now(timezone.utc).isoformat()
                 try:
+                    from version import CODEVERSION
+                except:
+                    CODEVERSION = "vunknown"
+                try:
                     await m.edit(content=f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{pid}|{INSTANCE_ID}|{ts2}|v{CODEVERSION}")
                 except discord.NotFound:
                     m = await channel.send(f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{pid}|{INSTANCE_ID}|{ts2}|v{CODEVERSION}")
@@ -451,6 +454,10 @@ async def wait_for_remote_release(channel):
             if not sent_can_start:
                 send_status(f"```diff\n+ Can Start By {USERNAME}\n```", thread_id=MAIN_THREAD_ID)
                 sent_can_start = True
+            try:
+                from version import CODEVERSION
+            except:
+                CODEVERSION = "vunknown"
             if not sent_version_alert and parsed.get("version") != f"v{CODEVERSION}":
                 send_status(f"# ALERT outdated version detected! < @&1424904999212814469 ><@727105264486187090> __v{CODEVERSION}≠{parsed.get("version")}__\ndebug info: me:{USERNAME}|{HOSTNAME}|none|**v{CODEVERSION}**, parsed message: {parsed}", thread_id=MAIN_THREAD_ID)
                 sent_version_alert = True
