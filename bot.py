@@ -2373,7 +2373,18 @@ def mainbotstart():
         sent = await target.send("🎛️ Панель TempVoice — нажмите кнопки для управления вашим временным каналом.", view=view)
         set_panel_message_id(int(trig_key), int(sent.id))
         await interaction.response.send_message("✅ Панель TempVoice отправлена.", ephemeral=True)
+    @bot.tree.command(name="ban", description="Заблокировать участника")
+    async def ban(interaction: discord.Interaction, member: discord.Member, reason: str, delete_days: int):
+        if not interaction.user.guild_permissions.ban_members and not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.HOST):
+            return await interaction.response.send_message("У вас нет прав на бан.", ephemeral=True)
 
+
+        if delete_days < 0 or delete_days > 7:
+            delete_days = 0
+
+
+        await interaction.guild.ban(member, reason=reason, delete_message_days=delete_days)
+        await interaction.response.send_message(f"Пользователь {member.mention} забанен. Причина: {reason}")
     # ----------------------------
     # SLASH: /chemical_reactions reactants
     # ----------------------------
