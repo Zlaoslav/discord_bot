@@ -2382,9 +2382,14 @@ def mainbotstart():
         if delete_days < 0 or delete_days > 7:
             delete_days = 0
 
-
-        await interaction.guild.ban(member, reason=reason, delete_message_days=delete_days)
-        await interaction.response.send_message(f"Пользователь {member.mention} забанен. Причина: {reason}")
+        try:
+            await interaction.guild.ban(member, reason=reason, delete_message_days=delete_days)
+            await interaction.response.send_message(f"Пользователь {member.mention} забанен. Причина: {reason}")
+        except discord.Forbidden:
+            await interaction.response.send_message("У бота отсутсвуют права на ban!")
+        except Exception as e:
+            await interaction.response.send_message("Неизсвестная ошибка!")
+            logger.error(e)
     # ----------------------------
     # SLASH: /chemical_reactions reactants
     # ----------------------------
