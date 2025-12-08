@@ -94,14 +94,54 @@ def remote_ref_exists(repo_root: Path, branch: str) -> bool:
             pass
     return False
 
-def fetch_origin(repo_root: Path) -> bool:
+def origin_url_exists(repo_root: Path) -> Optional[str]:
     try:
-        # fetch only origin to be conservative, не принуждаем --all
-        run_cmd("git", "-C", str(repo_root), "fetch", "origin", "--quiet", cwd=repo_root)
+        cp = run_cmd("git", "-C", str(repo_root), "remote", "get-url", "origin", cwd=repo_root, check=True)
+        return cp.stdout.decode().strip()
+    except subprocess.CalledProcessError:
+        return None
+
+def add_origin_if_missing(repo_root: Path, url: str) -> bool:
+    """Попытаться добавить origin, если его нет. Возвращает True при успехе или уже существующем origin."""
+    if origin_url_exists(repo_root):
+        return True
+    if not url:
+        print("[WARN] origin отсутствует и REPO_URL не указан; пропускаем добавление origin.")
+        return False
+    try:
+        print(f"[INFO] origin не найден — добавляем origin -> {url}")
+        run_cmd("git", "-C", str(repo_root), "remote", "add", "origin", url, cwd=repo_root, check=True)
         return True
     except subprocess.CalledProcessError as e:
-        # fetch failed (network/auth); оставляем сообщение и продолжаем без обновления
-        sys.stderr.write(f"git fetch failed: {e}\n")
+        print(f"[WARNING] Не удалось добавить origin: {e}")
+        return False
+
+def fetch_origin(repo_root: Path) -> bool:
+    """
+    Безопасный fetch origin:
+    - если origin отсутствует, пытаемся добавить его из REPO_URL (если указан)
+    - пытаемся выполнить fetch; при ошибке логируем и возвращаем False
+    """
+    try:
+        if not origin_url_exists(repo_root):
+            added = add_origin_if_missing(repo_root, REPO_URL)
+            if not added:
+                print("[WARNING] origin не настроен и не добавлен — пропускаем fetch.")
+                return False
+
+        # Попытка fetch origin (корректно ловим ошибку)
+        print("[INFO] Выполняем git fetch origin --prune --quiet")
+        run_cmd("git", "-C", str(repo_root), "fetch", "origin", "--prune", "--quiet", cwd=repo_root, check=True)
+        return True
+    except subprocess.CalledProcessError as e:
+        # подробная ошибка в stderr/exception: покажем её
+        print(f"[WARNING] git fetch failed: {e}")
+        # Дополнительно попытаемся получить более детальную причину через ls-remote
+        try:
+            cp = run_cmd("git", "-C", str(repo_root), "ls-remote", "origin", cwd=repo_root, check=True)
+            print("[INFO] git ls-remote returned:", cp.stdout.decode().strip()[:400])
+        except subprocess.CalledProcessError as e2:
+            print(f"[INFO] git ls-remote origin failed: {e2}")
         return False
 
 def get_remote_file_bytes(repo_root: Path, branch: str, relpath: str) -> Optional[bytes]:
