@@ -45,28 +45,59 @@ def detect_origin_default_branch(repo_root: Path) -> Optional[str]:
     Возвращает имя ветки без префикса origin/, например 'main' или 'master'
     """
     try:
-        # Результат обычно: "origin/main" — оставляем часть после "/"
-        cp = run_cmd("git", "rev-parse", "--abbrev-ref", "origin/HEAD", cwd=repo_root)
+        # Обычно origin/HEAD -> origin/main или origin/master
+        cp = run_cmd("git", "-C", str(repo_root), "rev-parse", "--abbrev-ref", "origin/HEAD", cwd=repo_root)
         text = cp.stdout.decode().strip()
         if "/" in text:
             return text.split("/", 1)[1]
-        # fallback: try common names
     except subprocess.CalledProcessError:
         pass
 
-    # Попробуем проверить, существует ли origin/main или origin/master
+    # Попробуем через ls-remote --symref (внешний remote)
+    try:
+        cp = run_cmd("git", "ls-remote", "--symref", "origin", "HEAD", cwd=repo_root, check=True)
+        out = cp.stdout.decode()
+        # строка вида: "ref: refs/heads/main\tHEAD"
+        for line in out.splitlines():
+            if line.startswith("ref:"):
+                parts = line.split()
+                if len(parts) >= 2 and parts[1].startswith("refs/heads/"):
+                    return parts[1].split("/", 2)[2]
+    except subprocess.CalledProcessError:
+        pass
+
+    # fallback: проверим существование origin/main или origin/master прямо в remote refs
     for candidate in ("main", "master"):
         try:
-            run_cmd("git", "rev-parse", f"origin/{candidate}", cwd=repo_root)
+            run_cmd("git", "-C", str(repo_root), "ls-remote", "--heads", "origin", candidate, cwd=repo_root)
             return candidate
         except subprocess.CalledProcessError:
             continue
     return None
 
+def remote_ref_exists(repo_root: Path, branch: str) -> bool:
+    """
+    Проверить, присутствует ли refs/remotes/origin/<branch> в локальном git.
+    Возвращает True если ref доступен (локально или в удалённом списке после fetch).
+    """
+    try:
+        # сначала проверим локальные refs/remotes
+        run_cmd("git", "-C", str(repo_root), "show-ref", "--verify", f"refs/remotes/origin/{branch}", cwd=repo_root, check=True)
+        return True
+    except subprocess.CalledProcessError:
+        # если нет локальной записи, попробуем проверить через ls-remote (удалённый origin)
+        try:
+            cp = run_cmd("git", "ls-remote", "--heads", "origin", branch, cwd=repo_root, check=True)
+            if cp.stdout and cp.stdout.strip():
+                return True
+        except subprocess.CalledProcessError:
+            pass
+    return False
+
 def fetch_origin(repo_root: Path) -> bool:
     try:
-        # fetch only origin to be conservative
-        run_cmd("git", "fetch", "origin", "--quiet", cwd=repo_root)
+        # fetch only origin to be conservative, не принуждаем --all
+        run_cmd("git", "-C", str(repo_root), "fetch", "origin", "--quiet", cwd=repo_root)
         return True
     except subprocess.CalledProcessError as e:
         # fetch failed (network/auth); оставляем сообщение и продолжаем без обновления
@@ -77,15 +108,13 @@ def get_remote_file_bytes(repo_root: Path, branch: str, relpath: str) -> Optiona
     # git show origin/branch:relpath
     object_ref = f"origin/{branch}:{relpath}"
     try:
-        cp = run_cmd("git", "show", object_ref, cwd=repo_root)
+        cp = run_cmd("git", "-C", str(repo_root), "show", object_ref, cwd=repo_root)
         return cp.stdout
     except subprocess.CalledProcessError:
         return None
 
 def backup_and_write(path: Path, data: bytes) -> Path:
-    # Раньше здесь создавался бэкап старой версии файла.
-    # Теперь непосредственно перезаписываем файл без создания бэкапа.
-    # Сохраняем попытку сохранить прежние права (если возможно) — читаем их до записи.
+    # Перезаписываем файл, пытаясь сохранить права
     try:
         try:
             old_mode = path.stat().st_mode
@@ -99,7 +128,6 @@ def backup_and_write(path: Path, data: bytes) -> Path:
                 pass
         return path
     except Exception:
-        # проброс ошибки наружу — вызывающий обработает логирование
         raise
 
 # ------------------- Git/pip helpers -------------------
@@ -108,24 +136,32 @@ def git_update():
     # Helper to try resetting to one of candidate branches
     def try_reset(candidates: list[str]) -> bool:
         for c in candidates:
+            # проверим, существует ли origin/<c>
+            if not remote_ref_exists(CURRENT_DIR, c):
+                print(f"[INFO] origin/{c} не найден — пропускаем попытку reset.")
+                continue
             try:
                 run_command(["git", "-C", str(CURRENT_DIR), "reset", "--hard", f"origin/{c}"])
                 print(f"[INFO] Reset to origin/{c} succeeded")
                 return True
             except subprocess.CalledProcessError:
+                print(f"[WARN] Reset to origin/{c} failed")
                 continue
         return False
 
     if git_dir.exists():
         print("[INFO] Репозиторий найден, обновляем...")
         try:
-            run_command(["git", "-C", str(CURRENT_DIR), "fetch", "--all"])
+            # fetch all refs from origin (сжатый и тихий режим)
+            run_command(["git", "-C", str(CURRENT_DIR), "fetch", "origin", "--prune", "--quiet"])
         except subprocess.CalledProcessError as e:
             print(f"[WARNING] git fetch failed: {e}")
+            # если fetch не удался — не будем пытаться reset к origin/<branch>, т.к. рефы, возможно, не обновлены
             return False
 
         # Попробуем определить ветку по-умолчанию у origin и сделать reset
         branch = detect_origin_default_branch(CURRENT_DIR) or "main"
+        print(f"[INFO] Попытка сброса к ветке по-умолчанию: {branch}")
         if try_reset([branch, "main", "master"]):
             print("[INFO] Репозиторий обновлен!")
             return True
@@ -135,14 +171,25 @@ def git_update():
     else:
         print("[INFO] Инициализация нового репозитория...")
         try:
-            run_command(["git", "init"])
-            run_command(["git", "remote", "add", "origin", REPO_URL])
-            run_command(["git", "fetch", "origin"])
+            run_command(["git", "init", str(CURRENT_DIR)])
+            run_command(["git", "-C", str(CURRENT_DIR), "remote", "add", "origin", REPO_URL])
+            # Попытаемся получить heads с origin (чтобы узнать, есть ли доступ)
+            fetched = False
+            try:
+                run_command(["git", "-C", str(CURRENT_DIR), "fetch", "origin", "--quiet"])
+                fetched = True
+            except subprocess.CalledProcessError as e:
+                print(f"[WARNING] git fetch после add remote FAILED: {e}")
+                fetched = False
+
+            if not fetched:
+                print("[WARNING] Не удалось получить refs от origin; репозиторий создан локально без фетча.")
         except subprocess.CalledProcessError as e:
             print(f"[WARNING] Ошибка при инициализации/фетче репозитория: {e}")
             return False
 
         branch = detect_origin_default_branch(CURRENT_DIR) or "main"
+        print(f"[INFO] После инициализации определена ветка: {branch}")
         if try_reset([branch, "main", "master"]):
             print("[INFO] Репозиторий инициализирован и обновлён!")
             return True
@@ -151,9 +198,7 @@ def git_update():
             return False
 
 def maybe_update_self():
-    # Новая логика: проверяем ВСЕ отслеживаемые git-файлы в репозитории.
-    # Если найдена любая обновлённая версия — перезаписываем файлы локально и
-    # перезапускаем `start.py` один раз, чтобы применились все изменения.
+    # Новая логика: обновляем только если repo найден и fetch успешен
     if getattr(sys, "frozen", False):
         return False
 
@@ -179,12 +224,10 @@ def maybe_update_self():
 
     any_changed = False
     for rel in files:
-        # Пропускаем пустые
         if not rel or rel.startswith(".git"):
             continue
         remote = get_remote_file_bytes(repo_root, branch, rel)
         if remote is None:
-            # файл может отсутствовать в origin — пропускаем
             continue
         local_path = repo_root / rel
         try:
@@ -197,7 +240,6 @@ def maybe_update_self():
                 any_changed = True
             except Exception as e:
                 sys.stderr.write(f"Ошибка при записи {local_path}: {e}\n")
-                # продолжаем пытаться обновить другие файлы
                 continue
 
     if any_changed:
@@ -220,9 +262,6 @@ if __name__ == "__main__":
         sys.stderr.write(f"Ошибка автообновления: {e}\n")
 else:
     os._exit(1)
-    
-
-
 
 # ------------------ startup ------------------
 import asyncio
@@ -249,7 +288,6 @@ if IS_WINDOWS:
         print("[WARN] Windows-specific modules not available; lock features may be limited")
         IS_WINDOWS = False
 
-
 # Load config
 CONFIGS_FOLDER = CURRENT_DIR / "configs_folder"
 SETTINGS_PATH = CONFIGS_FOLDER / "setings.json"
@@ -270,13 +308,6 @@ USERNAME = os.getenv("USERNAME") or "unknown"
 HOSTNAME = socket.gethostname()
 starttime = time.time()
 
-
-
-
-
-
-
-
 def install_requirements():
     print("[INFO] Обновляем pip...")
     run_command([sys.executable, "-m", "pip", "install", "--upgrade", "pip"])
@@ -286,7 +317,6 @@ def install_requirements():
     else:
         print("[INFO] requirements.txt не найден, пропускаем установку зависимостей.")
 
-
 # ------------------- Status webhook -------------------
 def send_status(msg: str, thread_id: int = None):
     """Send status via webhook (if configured)."""
@@ -294,11 +324,9 @@ def send_status(msg: str, thread_id: int = None):
         print("[WARN] STATUS_WEBHOOK_URL not configured; skipping status post")
         return
     try:
-        # threads removed — post directly to webhook
         requests.post(STATUS_WEBHOOK_URL, json={"content": msg}, timeout=5)
     except Exception as e:
         print("send_status error:", e)
-
 
 # ------------------- Local lock (from main.py) -------------------
 LOCK_PREFIX = "LOCK|"
@@ -307,33 +335,26 @@ _local_lock_fh = None
 _local_lock_socket = None
 LOCK_SOCKET_PORT = int(config.get("LOCK_SOCKET_PORT")) if config.get("LOCK_SOCKET_PORT") else 50001
 
-
 def acquire_local_lock() -> bool:
     global _local_lock_fh
     global _local_lock_socket
-    # Primary mechanism: try to bind a localhost TCP port. If bind succeeds,
-    # we assume this instance is the sole owner and keep the socket open.
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind(("127.0.0.1", LOCK_SOCKET_PORT))
         s.listen(1)
         _local_lock_socket = s
-        # Also write pid/timestamp to a lock file for diagnostics
         try:
             fh = open(_local_lock_path, "w")
             fh.write(f"{os.getpid()}\n{time.time()}\n")
             fh.flush()
             _local_lock_fh = fh
         except Exception:
-            # non-fatal: socket lock is primary
             _local_lock_fh = None
         return True
     except OSError:
-        # Port already in use — likely another instance. Fall back to file lock.
         pass
 
-    # Fallback: file locking (POSIX or Windows)
     if not IS_WINDOWS:
         try:
             fh = open(_local_lock_path, "w")
@@ -350,7 +371,6 @@ def acquire_local_lock() -> bool:
                 pass
             return False
 
-    # Windows fallback using msvcrt
     try:
         fh = open(_local_lock_path, "a+b")
         try:
@@ -371,7 +391,6 @@ def acquire_local_lock() -> bool:
             pass
         return False
 
-
 def release_local_lock():
     global _local_lock_fh
     try:
@@ -382,7 +401,6 @@ def release_local_lock():
                 except:
                     pass
             else:
-                # Linux/macOS: fcntl unlock
                 try:
                     import fcntl
                     fcntl.flock(_local_lock_fh.fileno(), fcntl.LOCK_UN)
@@ -393,7 +411,6 @@ def release_local_lock():
             except:
                 pass
             _local_lock_fh = None
-        # close socket lock if present
         global _local_lock_socket
         if '_local_lock_socket' in globals() and _local_lock_socket:
             try:
@@ -409,19 +426,15 @@ def release_local_lock():
     except Exception as e:
         print("release_local_lock error:", e)
 
-
-# ------------------- Console handler -------------------
 def format_duration(seconds: int) -> str:
     d, seconds = divmod(seconds, 86400)
     h, seconds = divmod(seconds, 3600)
     m, s = divmod(seconds, 60)
     return "".join(f"{x}{y}" for x, y in [(d, "d"), (h, "h"), (m, "m"), (s, "s")] if x)
 
-
 is_waiting = False
 sent_can_start = False
 sent_version_alert = False
-
 
 def console_handler(event):
     global is_waiting
@@ -439,13 +452,11 @@ def console_handler(event):
         return True
     return True
 
-
 try:
     if IS_WINDOWS:
         win32api.SetConsoleCtrlHandler(console_handler, True)
 except Exception as e:
     print("SetConsoleCtrlHandler failed:", e)
-
 
 # ------------------- Bot process loop (wrapped) -------------------
 def run_bot_loop():
@@ -470,8 +481,6 @@ def run_bot_loop():
         is_quick_restart = quick_restart_flag.exists()
         is_shutdown = shutdown_flag.exists()
 
-        # Перед рестартом — при полном рестарте делаем git update/install
-        # и если сам `start.py` был обновлён — перезапускаем супервизор.
         if not first_run and not is_quick_restart and not is_shutdown:
             send_status(f"```diff\n- Restarting bot by {USERNAME}\n```", thread_id=MAIN_THREAD_ID)
             try:
@@ -481,11 +490,8 @@ def run_bot_loop():
                 except Exception:
                     original_bytes = None
 
-                # Обновление репозитория выполняется единожды при старте (если нужно).
-                # Здесь только гарантируем установку зависимостей.
                 install_requirements()
 
-                # Если файл на диске изменился — перезапустим текущий процесс
                 try:
                     new_bytes = this_path.read_bytes()
                 except Exception:
@@ -543,7 +549,6 @@ def run_bot_loop():
         exit_code = proc.returncode
         print(f"[INFO] Бот завершил работу с кодом {exit_code}")
 
-        # Уведомления о завершении
         if exit_code == 0:
             send_status(f"```diff\n+ Bot stopped normally by {USERNAME}\n```", thread_id=MAIN_THREAD_ID)
         else:
@@ -554,7 +559,6 @@ def run_bot_loop():
         first_run = False
         print("[INFO] Перезапуск через 2 секунды...")
         time.sleep(2)
-
 
 # ------------------- Main client (lock manager) -------------------
 import discord
@@ -567,30 +571,25 @@ claimed_message_id = None
 heartbeat_task = None
 INSTANCE_ID = str(uuid.uuid4())[:8]
 
-
 async def get_last_lock_message(channel):
     async for msg in channel.history(limit=50):
         if msg.author == client.user and isinstance(msg.content, str) and msg.content.startswith(LOCK_PREFIX):
             return msg
     return None
 
-
 def parse_lock_content(content: str):
     try:
         parts = content.split("|")
-        # New format: LOCK|username|hostname|pid|instance_id|ts|version?
         if len(parts) >= 6:
             parsed = {"username": parts[1], "hostname": parts[2], "pid": parts[3], "instance": parts[4], "ts": parts[5]}
             if len(parts) >= 7:
                 parsed["version"] = parts[6]
             return parsed
-        # Old format (compat): LOCK|username|hostname|ts|version
         if len(parts) >= 5:
             return {"username": parts[1], "hostname": parts[2], "ts": parts[3], "version": parts[4]}
     except:
         pass
     return None
-
 
 def lock_is_recent(ts_iso: str, max_age_seconds=90):
     try:
@@ -598,7 +597,6 @@ def lock_is_recent(ts_iso: str, max_age_seconds=90):
         return (datetime.now(timezone.utc) - ts).total_seconds() < max_age_seconds
     except:
         return False
-
 
 async def claim_lock(channel):
     global claimed_message_id, heartbeat_task
@@ -637,7 +635,6 @@ async def claim_lock(channel):
     heartbeat_task = asyncio.create_task(heartbeat())
     return True
 
-
 async def release_remote_lock(channel):
     global claimed_message_id, heartbeat_task
     try:
@@ -660,7 +657,6 @@ async def release_remote_lock(channel):
             pass
     claimed_message_id = None
 
-
 async def wait_for_remote_release(channel):
     global is_waiting, sent_can_start, sent_version_alert
     is_waiting = True
@@ -676,7 +672,6 @@ async def wait_for_remote_release(channel):
             if not parsed:
                 is_waiting = False
                 return True
-            # Check if lock is stale (no heartbeat for > 90 seconds)
             if not lock_is_recent(parsed.get("ts"), max_age_seconds=90):
                 print("[INFO] Lock is stale (no heartbeat for >90s); claiming lock...")
                 is_waiting = False
@@ -689,17 +684,15 @@ async def wait_for_remote_release(channel):
             except:
                 CODEVERSION = "vunknown"
             if not sent_version_alert and parsed.get("version") != f"v{CODEVERSION}":
-                send_status(f"# ALERT outdated version detected! < @&1424904999212814469 ><@727105264486187090> __v{CODEVERSION}≠{parsed.get("version")}__\ndebug info: me:{USERNAME}|{HOSTNAME}|none|**v{CODEVERSION}**, parsed message: {parsed}", thread_id=MAIN_THREAD_ID)
+                send_status(f"# ALERT outdated version detected! < @&1424904999212814469 ><@727105264486187090> __v{CODEVERSION}≠{parsed.get('version')}__\ndebug info: me:{USERNAME}|{HOSTNAME}|none|**v{CODEVERSION}**, parsed message: {parsed}", thread_id=MAIN_THREAD_ID)
                 sent_version_alert = True
             await asyncio.sleep(15)
     finally:
         is_waiting = False
 
-
 async def run_main_job():
     print("Main job started (master).")
     send_status(f"```diff\n+ StartUp By {USERNAME}\n```", thread_id=MAIN_THREAD_ID)
-    # Запускаем loop запуска бота в фоновом потоке
     loop = asyncio.get_running_loop()
     asyncio.create_task(loop.run_in_executor(None, run_bot_loop))
     try:
@@ -709,14 +702,12 @@ async def run_main_job():
         print("Main job cancelled.")
         return
 
-
 async def startup_sequence():
     if not acquire_local_lock():
         send_status(f"```diff\n- Another copy on same device ({USERNAME}) stopped\n```", thread_id=MAIN_THREAD_ID)
         os._exit(0)
 
     if not LOCK_CHANNEL_ID:
-        # No lock channel configured; just claim local lock and start
         asyncio.create_task(run_main_job())
         return
 
@@ -764,7 +755,6 @@ async def startup_sequence():
 
     asyncio.create_task(watch_lock())
 
-
 @client.event
 async def on_ready():
     try:
@@ -778,12 +768,9 @@ async def on_ready():
             pass
         os._exit(1)
 
-
 if __name__ == "__main__":
     try:
-        # Устанавливаем зависимости (pip) один раз перед запуском.
         install_requirements()
-        # Запускаем lock-client (отдельный бот) — он запустит фоновый цикл для bot.py
         token_to_run = LOCK_BOT_TOKEN or DISCORD_TOKEN
         if token_to_run:
             client.run(token_to_run)
