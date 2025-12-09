@@ -1348,6 +1348,47 @@ def mainbotstart():
         view.add_item(RoleSelect(manager_id, target_id, set))
         await interaction.response.send_message(f"Выберите роль для {'установки' if set else 'удаления'} пользователю {member.mention}:", view=view, ephemeral=True)
 
+
+    # ----------------------------
+    # SLASH: /force_toggle_role role [member]
+    # ----------------------------
+    @bot.tree.command(name="force_toggle_role", description="Добавить/убрать роль участнику.")
+    async def toggle_role(interaction: discord.Interaction, role: discord.Role, member: discord.Member | None = None):
+        if interaction.guild is None:
+            await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=True)
+            return
+        
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.HOST):
+            await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
+            logging.debug(f"{interaction.user.name} try use toggle_role")
+            return
+        
+        bot_member = interaction.guild.me
+        if bot_member is None:
+            await interaction.response.send_message("Не удалось получить данные бота на сервере.", ephemeral=True)
+            return
+
+        if not bot_member.guild_permissions.manage_roles:
+            await interaction.response.send_message("У бота нет права Manage Roles. Дай право и попробуй снова.", ephemeral=True)
+            return
+
+        target = member or interaction.user
+        if isinstance(target, discord.User):
+            target = interaction.guild.get_member(target.id)
+
+        try:
+            if role in target.roles:
+                await target.remove_roles(role, reason=f"toggle_role by {interaction.user} ({interaction.user.id})")
+                await interaction.response.send_message(f"Роль `{role.name}` убрана у {target.mention}.", ephemeral=True)
+            else:
+                await target.add_roles(role, reason=f"toggle_role by {interaction.user} ({interaction.user.id})")
+                await interaction.response.send_message(f"Роль `{role.name}` выдана {target.mention}.", ephemeral=True)
+        except discord.Forbidden:
+            await interaction.response.send_message("Недостаточно прав для изменения ролей. Проверь позицию роли бота и права.", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"Ошибка при изменении роли: {e}", ephemeral=True)
+
+
     # ----------------------------
     # SLASH: /toggle_role role [member]
     # ----------------------------
