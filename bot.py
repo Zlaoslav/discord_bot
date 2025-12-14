@@ -767,10 +767,23 @@ def get_all_temp_channels_for_trigger(trigger_channel_id: int) -> list[int]:
 YTDL_OPTS = {
     "format": "bestaudio/best",
     "noplaylist": True,
-    "quiet": True,              # убираем лишний шум
-    "no_warnings": True,        # убираем WARNING
+    "quiet": True,
+    "no_warnings": True,
     "default_search": "ytsearch",
+
+    # КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ
+    "extractor_args": {
+        "youtube": {
+            "player_client": ["android"],
+            "skip": ["webpage"]
+        }
+    },
+
+    # повышает стабильность
+    "force_ipv4": True,
+    "nocheckcertificate": True,
 }
+
 YTDL = yt_dlp.YoutubeDL(YTDL_OPTS)
 customplay_queue = asyncio.Queue()
 async def play_next(vc):
