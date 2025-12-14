@@ -3,3 +3,4 @@ playwright
 PyNaCl
 google-genai
 requests
+yt_dlp
