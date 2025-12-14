@@ -44,6 +44,7 @@ class PermRole(Enum):
     PERMSMANAGER = "permsmanager"
     MODERATOR = "moderator"
     # Независимые роли
+    CUSTOMPLAY = "customplay"
     SOUNDPAD = "soundpad"
     JOIN = "join"
     LEAVE = "leave"
@@ -59,6 +60,7 @@ HIERARCHY_ROLES = [
 
 # Независимые роли
 INDEPENDENT_ROLES = {
+    PermRole.CUSTOMPLAY,
     PermRole.SOUNDPAD,
     PermRole.JOIN,
     PermRole.LEAVE,
@@ -273,7 +275,8 @@ def get_role_description(role: PermRole) -> str:
         PermRole.OWNER: "🟠 Владелец, все права которые не могут повлиять на работу бота, так же если вам её выдали значит вам доверяют",
         PermRole.PERMSMANAGER: "🟡 Админ, может менять права других",
         PermRole.MODERATOR: "🔵 Типо модератор да он крутой да да да ",
-        PermRole.SOUNDPAD: "🎵 Доступ к soundpad",
+        PermRole.CUSTOMPLAY: "🎵 Доступ к /play /stop /skip",
+        PermRole.SOUNDPAD: "🎵 Доступ к /soundpad",
         PermRole.JOIN: "➡️ Право присоединиться к войсу",
         PermRole.LEAVE: "⬅️ Право отключиться от войса",
     }
