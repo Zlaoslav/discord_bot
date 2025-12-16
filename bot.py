@@ -12,6 +12,7 @@ import logging
 import socket
 import time
 import datetime
+import threading
 
 import discord
 from discord.ext import commands
@@ -22,7 +23,6 @@ import math
 import ast
 
 from playwright.async_api import async_playwright
-
 
 import configs_folder.perms_manager as perms_manager
 import chem_reactions 
@@ -345,6 +345,24 @@ def _init_db():
             PRIMARY KEY(user_id, date)
         );
     """)
+    # Таблица уровней пользователей
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_level (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            xp INTEGER NOT NULL DEFAULT 0,
+            voice_time INTEGER NOT NULL DEFAULT 0,
+            level INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (guild_id, user_id)
+        );
+    """)
+    # Таблица для настроек уведомлений о повышении уровня: хранит канал для каждой гильдии
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS level_alerts (
+            guild_id INTEGER PRIMARY KEY,
+            channel_id INTEGER
+        );
+    """)
     conn.commit()
     conn.close()
 
@@ -384,6 +402,146 @@ def get_remaining_requests(user_id: int) -> int:
     rem = DAILY_REQUEST_LIMIT - used
     return rem if rem >= 0 else 0
 
+# ------------------ helpers user_level ------------------
+def get_xp(guild_id: int, user_id: int) -> int:
+    """Возвращает опыт по айди гильдии и айди участника если нет то 0."""
+
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT xp FROM user_level WHERE guild_id = ? AND user_id = ?;",
+        (guild_id, user_id)
+    )
+
+    row = cur.fetchone()
+    conn.close()
+
+    return row[0] if row else 0
+
+def add_xp(guild_id: int, user_id: int, amount: int) -> None:
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        INSERT INTO user_level (guild_id, user_id, xp)
+        VALUES (?, ?, ?)
+        ON CONFLICT(guild_id, user_id)
+        DO UPDATE SET xp = xp + excluded.xp;
+        """,
+        (guild_id, user_id, amount)
+    )
+
+    conn.commit()
+    conn.close()
+
+def get_voice_time(guild_id: int, user_id: int) -> int:
+    """Возвращает время войса по айди гильдии и айди участника если нет то 0."""
+
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT voice_time FROM user_level WHERE guild_id = ? AND user_id = ?;",
+        (guild_id, user_id)
+    )
+
+    row = cur.fetchone()
+    conn.close()
+
+    return row[0] if row else 0
+
+def add_voice_time(guild_id: int, user_id: int, amount: int) -> None:
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        INSERT INTO user_level (guild_id, user_id, voice_time)
+        VALUES (?, ?, ?)
+        ON CONFLICT(guild_id, user_id)
+        DO UPDATE SET voice_time = voice_time + excluded.voice_time;
+        """,
+        (guild_id, user_id, amount)
+    )
+
+    conn.commit()
+    conn.close()
+
+MAX_LEVEL = 1000  # максимальный уровень
+def xp_to_level(guild_id: int, user_id: int) -> int:
+    """Конвертация опыта в уровень по формуле"""
+
+    xp = get_xp(guild_id, user_id)
+    level = 0
+
+    while True:
+        next_level_xp = 25 * (level + 1) * (level + 2)
+        if xp < next_level_xp or level >= MAX_LEVEL:
+            break
+        level += 1
+
+    return level
+
+
+
+async def on_xp_added(guild_id: int, user_id: int):
+    """Проверяет уровень пользователя и при повышении — обновляет в БД и присылает уведомление в настроенный канал."""
+    try:
+        new_level = xp_to_level(guild_id, user_id)
+        old_level = get_user_level(guild_id, user_id)
+        if new_level != old_level:
+            # сохраняем новый уровень
+            try:
+                set_user_level(guild_id, user_id, new_level)
+            except Exception as e:
+                logging.warning(f"Не удалось сохранить уровень пользователя в БД: {e}")
+
+            # отправляем уведомление только при повышении
+            if new_level > old_level:
+                ch_id = get_level_alerts_channel(guild_id)
+                if not ch_id:
+                    return
+                try:
+                    ch = bot.get_channel(ch_id) or await bot.fetch_channel(ch_id)
+                except Exception as e:
+                    logging.warning(f"Не удалось получить канал для оповещений уровней (guild={guild_id}): {e}")
+                    return
+                try:
+                    await ch.send(f"🎉 <@{user_id}> достиг уровня **{new_level}**! Поздравляем!")
+                except Exception as e:
+                    logging.warning(f"Не удалось отправить уведомление о новом уровне: {e}")
+    except Exception as e:
+        logging.exception(f"Ошибка в on_xp_added: {e}")
+
+USER_LEVEL_COOLDOWN = 60
+user_level_last_calls = {}
+user_level_lock = threading.Lock()
+
+def can_call(guild_id: int, user_id: int) -> bool:
+    key = (guild_id, user_id)
+    now = time.time()
+
+    with user_level_lock:
+        last_time = user_level_last_calls.get(key)
+        if last_time and now - last_time < USER_LEVEL_COOLDOWN:
+            return False
+
+        user_level_last_calls[key] = now
+        return True
+
+def try_give_xp(guild_id: int, user_id: int):
+    if not can_call(guild_id, user_id):
+        return
+
+    add_xp(guild_id, user_id, random.randint(5, 10))
+    # Проверяем асинхронно, повысился ли уровень и отправляем уведомление если нужно
+    try:
+        asyncio.create_task(on_xp_added(guild_id, user_id))
+    except Exception:
+        pass
+
 
 # ------------------ helpers for long messages ------------------
 def _chunk_text(text: str, size: int = 1900) -> list:
@@ -420,6 +578,47 @@ def get_join_leave_channel() -> Optional[int]:
     channel_id = row[0] if row else None
     conn.close()
     return channel_id
+
+# ------------------ level alerts helpers ------------------
+def save_level_alerts_channel(guild_id: int, channel_id: Optional[int]) -> None:
+    """Сохраняет канал для уведомлений о повышении уровня для гильдии (передайте None чтобы очистить)."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("INSERT OR REPLACE INTO level_alerts (guild_id, channel_id) VALUES (?, ?);", (guild_id, channel_id))
+    conn.commit()
+    conn.close()
+
+def get_level_alerts_channel(guild_id: int) -> Optional[int]:
+    """Возвращает channel_id для уведомлений о повышении уровня для гильдии или None."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("SELECT channel_id FROM level_alerts WHERE guild_id = ?;", (guild_id,))
+    row = cur.fetchone()
+    conn.close()
+    return row[0] if row and row[0] is not None else None
+
+# ------------------ per-user level helpers ------------------
+def get_user_level(guild_id: int, user_id: int) -> int:
+    """Возвращает сохранённый уровень пользователя (если нет — 0)."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("SELECT level FROM user_level WHERE guild_id = ? AND user_id = ?;", (guild_id, user_id))
+    row = cur.fetchone()
+    conn.close()
+    return int(row[0]) if row else 0
+
+def set_user_level(guild_id: int, user_id: int, level: int) -> None:
+    """Устанавливает уровень пользователя (вставка или обновление)."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO user_level (guild_id, user_id, level)
+        VALUES (?, ?, ?)
+        ON CONFLICT(guild_id, user_id)
+        DO UPDATE SET level = excluded.level;
+    """, (guild_id, user_id, level))
+    conn.commit()
+    conn.close()
 
 # --- Функции работы с состоянием рестарта ---
 def save_restart_channel(channel_id: Optional[int]) -> None:
@@ -2013,7 +2212,34 @@ def mainbotstart():
         except Exception as e:
             logging.exception(f"Ошибка при удалении tempvoice триггера: {e}")
             await interaction.response.send_message("Ошибка при удалении триггера (см лог).", ephemeral=True)
+    # ----------------------------
+    # SLASH: /lvl member - посмотреть уровень участника, по умолчанию свой
+    # ----------------------------
+    @bot.tree.command(name="lvl", description="Посмотерть уровень")
+    async def unset_tempvoicechannel(interaction: discord.Interaction, member: discord.Member | None = None):
+        if interaction.guild is None:
+            await interaction.response.send_message("Команда только на сервере.", ephemeral=True)
+            return
+        member = member or interaction.user
+        await interaction.response.send_message(f"Уровень участника {member.mention}: {xp_to_level(member.guild.id, member.id)}\nВремя войс чата: {get_voice_time(member.guild.id, member.id)}\nDeBug: xp={get_xp(member.guild.id, member.id)}, guild_id={member.guild.id}, user_id={member.id}")
 
+    @bot.tree.command(name="set_level_alerts_channel", description="Установить канал для уведомлений о повышении уровня (owner only)")
+    async def set_level_alerts_channel_cmd(interaction: discord.Interaction, channel: discord.TextChannel | None = None):
+        if interaction.guild is None:
+            await interaction.response.send_message("Команда доступна только на сервере.", ephemeral=True)
+            return
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
+            await interaction.response.send_message("У вас недостаточно прав для этой команды.", ephemeral=True)
+            return
+        try:
+            save_level_alerts_channel(interaction.guild.id, channel.id if channel else None)
+            if channel:
+                await interaction.response.send_message(f"Канал для уведомлений о повышении уровня установлен: {channel.mention}", ephemeral=True)
+            else:
+                await interaction.response.send_message("Канал для уведомлений о повышении уровня очищен.", ephemeral=True)
+        except Exception as e:
+            logging.exception(f"Ошибка при сохранении канала уведомлений уровней: {e}")
+            await interaction.response.send_message("Ошибка при сохранении.", ephemeral=True)
     # ----------------------------
     # SLASH: /send_tempvoicepanel (owner only) — отправить панель управления
     # ----------------------------
@@ -2782,6 +3008,35 @@ def mainbotstart():
             logging.exception(f"Ошибка в on_voice_state_update (tempvoice): {e}")
 
 
+
+
+    # ----------------------------
+    # Время войс чата
+    # ----------------------------
+    voice_join_time = {}  # key = (guild_id, user_id), value = timestamp
+    @bot.event
+    async def on_voice_state_update(member, before, after):
+        key = (member.guild.id, member.id)
+        now = time.time()
+
+        # Пользователь вошёл в голосовой канал
+        if before.channel is None and after.channel is not None:
+            voice_join_time[key] = now
+
+        # Пользователь вышел из голосового канала
+        elif before.channel is not None and after.channel is None:
+            join_time = voice_join_time.pop(key, None)
+            if join_time:
+                duration = int(now - join_time)
+                add_voice_time(member.guild.id, member.id, duration)
+
+        # Пользователь переключился между каналами
+        elif before.channel != after.channel:
+            join_time = voice_join_time.get(key)
+            if join_time:
+                duration = int(now - join_time)
+                add_voice_time(member.guild.id, member.id, duration)
+                voice_join_time[key] = now
     # ----------------------------
     # ОБРАБОТКА ОСТАЛЬНЫХ СООБЩЕНИЙ
     # ----------------------------      
@@ -2933,6 +3188,27 @@ def mainbotstart():
         except Exception as e:
             logging.error(f"Ошибка при добавлении роли на реакцию: {e}")
 
+
+    @bot.event
+    async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
+        if payload.guild_id is None:
+            return  # это DM, игнорируем
+
+        # Проверка: автор не бот
+        member = payload.member  # может быть None, если бот не кэширует members
+        if member is None:
+            guild = bot.get_guild(payload.guild_id)
+            member = guild.get_member(payload.user_id)  # ищем в кеше
+        if member is None:
+            # Если не нашли в кеше — можно запросить через API:
+            # member = await guild.fetch_member(payload.user_id)
+            return
+
+        if member.bot:
+            return  # реакция от бота, игнорируем
+        try_give_xp(payload.guild_id, payload.user_id)
+    
+    
     @bot.event
     async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
         """Обработчик удаления реакции."""
@@ -2983,6 +3259,8 @@ def mainbotstart():
         await bot.process_commands(message)
         await on_counting_message(message)
         await on_sus_message(message)
+        if message.guild and not message.author.bot:
+            try_give_xp(message.guild.id, message.author.id)
     
 
         
