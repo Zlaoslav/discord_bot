@@ -347,7 +347,7 @@ def _init_db():
     """)
     # Таблица уровней пользователей
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS user_level (
+        CREATE TABLE IF NOT EXISTS level_users (
             guild_id INTEGER NOT NULL,
             user_id INTEGER NOT NULL,
             xp INTEGER NOT NULL DEFAULT 0,
@@ -361,6 +361,15 @@ def _init_db():
         CREATE TABLE IF NOT EXISTS level_alerts (
             guild_id INTEGER PRIMARY KEY,
             channel_id INTEGER
+        );
+    """)
+    # Таблица наград за получение уровня
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS level_rewards (
+            guild_id INTEGER NOT NULL,
+            level INTEGER NOT NULL,
+            role INTEGER NOT NULL,
+            PRIMARY KEY (guild_id, level)
         );
     """)
     conn.commit()
@@ -402,6 +411,55 @@ def get_remaining_requests(user_id: int) -> int:
     rem = DAILY_REQUEST_LIMIT - used
     return rem if rem >= 0 else 0
 
+def set_level_reward(guild_id: int, level: int, role_id: int | None = None) -> None:
+    """
+    Устанавливает или удаляет награду за уровень.
+
+    - role_id > 0  → назначить / переназначить награду
+    - role_id == 0 или None → удалить награду за уровень
+    """
+
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    # удаление награды
+    if not role_id:
+        cur.execute(
+            "DELETE FROM level_rewards WHERE guild_id = ? AND level = ?;",
+            (guild_id, level)
+        )
+    else:
+        # назначение / переназначение награды
+        cur.execute(
+            """
+            INSERT INTO level_rewards (guild_id, level, role)
+            VALUES (?, ?, ?)
+            ON CONFLICT(guild_id, level)
+            DO UPDATE SET role = excluded.role;
+            """,
+            (guild_id, level, role_id)
+        )
+
+    conn.commit()
+    conn.close()
+
+
+def get_level_rewards(guild_id: int) -> list[tuple[int, int]]:
+    """
+    Возвращает список наград уровней:
+    [(level, role_id), ...]
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT level, role FROM level_rewards WHERE guild_id = ?;",
+        (guild_id,)
+    )
+
+    rows = cur.fetchall()
+    conn.close()
+    return rows
 # ------------------ helpers user_level ------------------
 def get_xp(guild_id: int, user_id: int) -> int:
     """Возвращает опыт по айди гильдии и айди участника если нет то 0."""
@@ -410,7 +468,7 @@ def get_xp(guild_id: int, user_id: int) -> int:
     cur = conn.cursor()
 
     cur.execute(
-        "SELECT xp FROM user_level WHERE guild_id = ? AND user_id = ?;",
+        "SELECT xp FROM level_users WHERE guild_id = ? AND user_id = ?;",
         (guild_id, user_id)
     )
 
@@ -425,7 +483,7 @@ def add_xp(guild_id: int, user_id: int, amount: int) -> None:
 
     cur.execute(
         """
-        INSERT INTO user_level (guild_id, user_id, xp)
+        INSERT INTO level_users (guild_id, user_id, xp)
         VALUES (?, ?, ?)
         ON CONFLICT(guild_id, user_id)
         DO UPDATE SET xp = xp + excluded.xp;
@@ -443,7 +501,7 @@ def get_voice_time(guild_id: int, user_id: int) -> int:
     cur = conn.cursor()
 
     cur.execute(
-        "SELECT voice_time FROM user_level WHERE guild_id = ? AND user_id = ?;",
+        "SELECT voice_time FROM level_users WHERE guild_id = ? AND user_id = ?;",
         (guild_id, user_id)
     )
 
@@ -458,7 +516,7 @@ def add_voice_time(guild_id: int, user_id: int, amount: int) -> None:
 
     cur.execute(
         """
-        INSERT INTO user_level (guild_id, user_id, voice_time)
+        INSERT INTO level_users (guild_id, user_id, voice_time)
         VALUES (?, ?, ?)
         ON CONFLICT(guild_id, user_id)
         DO UPDATE SET voice_time = voice_time + excluded.voice_time;
@@ -485,33 +543,82 @@ def xp_to_level(guild_id: int, user_id: int) -> int:
     return level
 
 
+def xp_left_to_next_level(guild_id: int, user_id: int) -> int:
+    """
+    Возвращает количество опыта, которое осталось до следующего уровня.
+    Если достигнут MAX_LEVEL — возвращает 0.
+    """
+
+    xp = get_xp(guild_id, user_id)
+    level = xp_to_level(guild_id, user_id)
+
+    if level >= MAX_LEVEL:
+        return 0
+
+    # XP, необходимый для достижения следующего уровня
+    next_level_xp = 25 * (level + 1) * (level + 2)
+
+    return max(0, next_level_xp - xp)
+
 
 async def on_xp_added(guild_id: int, user_id: int):
-    """Проверяет уровень пользователя и при повышении — обновляет в БД и присылает уведомление в настроенный канал."""
     try:
         new_level = xp_to_level(guild_id, user_id)
         old_level = get_user_level(guild_id, user_id)
-        if new_level != old_level:
-            # сохраняем новый уровень
-            try:
-                set_user_level(guild_id, user_id, new_level)
-            except Exception as e:
-                logging.warning(f"Не удалось сохранить уровень пользователя в БД: {e}")
 
-            # отправляем уведомление только при повышении
-            if new_level > old_level:
-                ch_id = get_level_alerts_channel(guild_id)
-                if not ch_id:
-                    return
+        # если уровень изменился — сохраняем
+        if new_level != old_level:
+            set_user_level(guild_id, user_id, new_level)
+
+        guild = bot.get_guild(guild_id)
+        if not guild:
+            return
+
+        member = guild.get_member(user_id)
+        if not member:
+            return
+
+        rewards = get_level_rewards(guild_id)
+
+        for required_level, role_id in rewards:
+            role = guild.get_role(role_id)
+            if not role:
+                continue
+
+            has_role = role in member.roles
+
+            # уровень достаточный — выдаём роль
+            if new_level >= required_level and not has_role:
                 try:
-                    ch = bot.get_channel(ch_id) or await bot.fetch_channel(ch_id)
+                    await member.add_roles(role, reason="Level reward")
                 except Exception as e:
-                    logging.warning(f"Не удалось получить канал для оповещений уровней (guild={guild_id}): {e}")
-                    return
+                    logging.warning(
+                        f"Не удалось выдать роль {role_id} пользователю {user_id}: {e}"
+                    )
+
+            # уровень недостаточный — забираем роль
+            elif new_level < required_level and has_role:
                 try:
-                    await ch.send(f"🎉 <@{user_id}> достиг уровня **{new_level}**! Поздравляем!")
+                    await member.remove_roles(role, reason="Level reward removed")
                 except Exception as e:
-                    logging.warning(f"Не удалось отправить уведомление о новом уровне: {e}")
+                    logging.warning(
+                        f"Не удалось забрать роль {role_id} у пользователя {user_id}: {e}"
+                    )
+
+        # уведомление о повышении уровня
+        if new_level > old_level:
+            ch_id = get_level_alerts_channel(guild_id)
+            if not ch_id:
+                return
+
+            try:
+                ch = bot.get_channel(ch_id) or await bot.fetch_channel(ch_id)
+                await ch.send(
+                    f"🎉 <@{user_id}> достиг уровня **{new_level}**! Поздравляем!"
+                )
+            except Exception as e:
+                logging.warning(f"Не удалось отправить уведомление: {e}")
+
     except Exception as e:
         logging.exception(f"Ошибка в on_xp_added: {e}")
 
@@ -602,7 +709,7 @@ def get_user_level(guild_id: int, user_id: int) -> int:
     """Возвращает сохранённый уровень пользователя (если нет — 0)."""
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute("SELECT level FROM user_level WHERE guild_id = ? AND user_id = ?;", (guild_id, user_id))
+    cur.execute("SELECT level FROM level_users WHERE guild_id = ? AND user_id = ?;", (guild_id, user_id))
     row = cur.fetchone()
     conn.close()
     return int(row[0]) if row else 0
@@ -612,7 +719,7 @@ def set_user_level(guild_id: int, user_id: int, level: int) -> None:
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO user_level (guild_id, user_id, level)
+        INSERT INTO level_users (guild_id, user_id, level)
         VALUES (?, ?, ?)
         ON CONFLICT(guild_id, user_id)
         DO UPDATE SET level = excluded.level;
@@ -2221,8 +2328,10 @@ def mainbotstart():
             await interaction.response.send_message("Команда только на сервере.", ephemeral=True)
             return
         member = member or interaction.user
-        await interaction.response.send_message(f"Уровень участника {member.mention}: {xp_to_level(member.guild.id, member.id)}\nВремя войс чата: {get_voice_time(member.guild.id, member.id)}\nDeBug: xp={get_xp(member.guild.id, member.id)}, guild_id={member.guild.id}, user_id={member.id}")
-
+        await interaction.response.send_message(f"Уровень участника {member.name}: {xp_to_level(member.guild.id, member.id)}, до следующего уровня осталось {xp_left_to_next_level(member.guild.id, member.id)} опыта\nВремя войс чата: {get_voice_time(member.guild.id, member.id)}\nDeBug: xp={get_xp(member.guild.id, member.id)}, guild_id={member.guild.id}, user_id={member.id}")
+    # ----------------------------
+    # SLASH: /set_level_alerts_channel channel - установить канал для уведомлений о новом уровне
+    # ----------------------------
     @bot.tree.command(name="set_level_alerts_channel", description="Установить канал для уведомлений о повышении уровня (owner only)")
     async def set_level_alerts_channel_cmd(interaction: discord.Interaction, channel: discord.TextChannel | None = None):
         if interaction.guild is None:
@@ -2240,6 +2349,28 @@ def mainbotstart():
         except Exception as e:
             logging.exception(f"Ошибка при сохранении канала уведомлений уровней: {e}")
             await interaction.response.send_message("Ошибка при сохранении.", ephemeral=True)
+    # ----------------------------
+    # SLASH: /set_lvl_reward level reward - установить награду за уровень
+    # ----------------------------
+    @bot.tree.command(name="set_lvl_reward", description="Установить награду за получение уровня (owner only)")
+    async def set_lvl_reward(interaction: discord.Interaction, level: int, reward: discord.Role | None = None):
+        if interaction.guild is None:
+            await interaction.response.send_message("Команда доступна только на сервере.", ephemeral=True)
+            return
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
+            await interaction.response.send_message("У вас недостаточно прав для этой команды.", ephemeral=True)
+            return
+        if level <= 0 or level > MAX_LEVEL:
+            await interaction.response.send_message(f"Уровень должен быть больше нуля и меньше {MAX_LEVEL}!", ephemeral=True)
+            return
+        try:
+            reward = reward.id or 0
+            set_level_reward(interaction.guild_id, level, reward)
+            await interaction.response.send_message(f"Роль: <@&{reward}> назначенна наградой за уровень {level} успешно!", ephemeral=True)
+        except Exception as e:
+            logging.exception(f"Ошибка при сохранении награды за уровень: {e}")
+            await interaction.response.send_message(f"Ошибка установки награды!", ephemeral=True)
+
     # ----------------------------
     # SLASH: /send_tempvoicepanel (owner only) — отправить панель управления
     # ----------------------------
