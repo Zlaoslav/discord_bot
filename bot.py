@@ -2323,12 +2323,62 @@ def mainbotstart():
     # SLASH: /lvl member - посмотреть уровень участника, по умолчанию свой
     # ----------------------------
     @bot.tree.command(name="lvl", description="Посмотерть уровень")
-    async def unset_tempvoicechannel(interaction: discord.Interaction, member: discord.Member | None = None):
+    async def lvl(
+        interaction: discord.Interaction,
+        member: discord.Member | None = None
+    ):
         if interaction.guild is None:
-            await interaction.response.send_message("Команда только на сервере.", ephemeral=True)
+            await interaction.response.send_message(
+                "Команда доступна только на сервере.",
+                ephemeral=True
+            )
             return
+
         member = member or interaction.user
-        await interaction.response.send_message(f"Уровень участника {member.name}: {xp_to_level(member.guild.id, member.id)}, до следующего уровня осталось {xp_left_to_next_level(member.guild.id, member.id)} опыта\nВремя войс чата: {get_voice_time(member.guild.id, member.id)}\nDeBug: xp={get_xp(member.guild.id, member.id)}, guild_id={member.guild.id}, user_id={member.id}")
+        guild_id = interaction.guild.id
+        user_id = member.id
+
+        level = xp_to_level(guild_id, user_id)
+        xp_left = xp_left_to_next_level(guild_id, user_id)
+        voice_time = format_duration(get_voice_time(guild_id, user_id))
+        if voice_time == "" or voice_time == None:
+            voice_time = "-"
+        xp = get_xp(guild_id, user_id)
+
+        embed = discord.Embed(
+            title=member.display_name,
+            url=f"https://discord.com/users/{member.id}",
+            description="Информация об уровне участника",
+            color=member.color if member.color.value != 0 else discord.Color.blurple()
+        )
+
+        embed.set_thumbnail(url=member.display_avatar.url)
+
+        embed.add_field(name="Уровень", value=f"**{level}**", inline=True)
+        embed.add_field(name="До следующего уровня", value=f"{xp_left} XP", inline=True)
+        embed.add_field(name="Время в voice", value=str(voice_time), inline=False)
+
+        # DEBUG
+        if perms_manager.has_perm(
+            interaction.user.id,
+            perms_manager.PermRole.OWNER
+        ):
+            embed.add_field(
+                name="Debug",
+                value=(
+                    f"XP: `{xp}`\n"
+                    f"Guild ID: `{guild_id}`\n"
+                    f"User ID: `{user_id}`"
+                ),
+                inline=False
+            )
+
+        embed.set_footer(
+            text=f"Запросил: {interaction.user.display_name}",
+            icon_url=interaction.user.display_avatar.url
+        )
+
+        await interaction.response.send_message(embed=embed)
     # ----------------------------
     # SLASH: /set_level_alerts_channel channel - установить канал для уведомлений о новом уровне
     # ----------------------------
