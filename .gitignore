@@ -1,6 +1,7 @@
 perms_data.json
 setings.json
 bot_state.db
+run_tests_manual.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

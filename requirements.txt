@@ -4,3 +4,10 @@ PyNaCl
 google-genai
 requests
 yt_dlp
+
+# Web / OAuth
+fastapi
+uvicorn[standard]
+httpx
+python-jose[cryptography]
+jose

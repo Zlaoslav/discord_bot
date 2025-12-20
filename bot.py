@@ -3458,6 +3458,17 @@ def mainbotstart():
         except Exception as e:
             logging.error(f"Ошибка при отправке уведомления после рестарта: {e}")
 
+        # Start embedded web server for OAuth/API (pollpi)
+        try:
+            import discord_bot.web as web
+            web.set_bot(bot)
+            host = config_setings.get("WEB_HOST") or "0.0.0.0"
+            port = int(config_setings.get("WEB_PORT")) if config_setings.get("WEB_PORT") else 8000
+            web.start_server_in_thread(host=host, port=port)
+            logging.info(f"✅ Web server started on {host}:{port}")
+        except Exception as e:
+            logging.warning(f"Не удалось запустить web server: {e}")
+
 #        try:
 #            synced = await sync_local_slash()
 #            logging.debug(f"Синхронизировано {len(synced)} команд(ы) для гильдии {GUILD_ID}")
