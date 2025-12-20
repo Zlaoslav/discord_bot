@@ -106,6 +106,21 @@ intents.voice_states = True     # нужен для отслеживания в�
 bot = commands.Bot(command_prefix="?", intents=intents)  # ПРЕФИКС
 GUILD = discord.Object(id=GUILD_ID)
 
+# Optional hook: apply_guild_config will be called by the embedded web server when a guild config is saved
+async def apply_guild_config(guild_id: int, cfg: dict):
+    """Default stub: override or extend in your bot code to apply configuration immediately."""
+    try:
+        logger.info('apply_guild_config called for %s: %s', guild_id, cfg)
+        # Example: apply some settings — implement as needed
+        # guild = bot.get_guild(guild_id)
+        # if guild and cfg.get('some_setting'):
+        #     ...
+    except Exception:
+        logger.exception('apply_guild_config failed')
+
+# attach to bot instance so web.py can call it
+bot.apply_guild_config = apply_guild_config
+
 COUNTER_TOLERANCE = 0.4  # допустимое отклонение у counting канала
 OWNER_ID = 727105264486187090
 
@@ -3460,7 +3475,7 @@ def mainbotstart():
 
         # Start embedded web server for OAuth/API (pollpi)
         try:
-            import discord_bot.web as web
+            import web
             web.set_bot(bot)
             host = config_setings.get("WEB_HOST") or "0.0.0.0"
             port = int(config_setings.get("WEB_PORT")) if config_setings.get("WEB_PORT") else 8000

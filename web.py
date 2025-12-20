@@ -12,7 +12,7 @@ import hashlib
 import threading
 import httpx
 from jose import jwt
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 BASE_DIR = os.path.dirname(__file__)
 CONFIG_PATH = os.path.join(BASE_DIR, "configs_folder", "setings.json")
@@ -134,9 +134,36 @@ def decode_jwt(token: str) -> Dict[str, Any]:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 
-# OAuth start
+# Security helpers: require TLS and verify Origin/Referer matches FRONTEND_URL when present
+def _origin_base_from_header(h: Optional[str]) -> Optional[str]:
+    if not h:
+        return None
+    try:
+        p = urlparse(h)
+        if not p.scheme or not p.netloc:
+            return None
+        return f"{p.scheme}://{p.netloc}"
+    except Exception:
+        return None
+
+
+def _require_https_and_origin(request: Request):
+    # Enforce HTTPS (honor X-Forwarded-Proto when present) and check Origin/Referer matches FRONTEND_URL if provided
+    proto = request.headers.get('x-forwarded-proto') or request.url.scheme
+    if proto != 'https':
+        raise HTTPException(status_code=403, detail='Insecure connection — use HTTPS')
+    origin = request.headers.get('origin') or request.headers.get('referer')
+    origin_base = _origin_base_from_header(origin) if origin else None
+    if origin_base and origin_base != FRONTEND_URL:
+        raise HTTPException(status_code=403, detail='Invalid request origin')
+
+
+# OAuth start (legacy; server-generated redirect)
 @app.get("/auth/discord/start")
-async def auth_start(return_to: Optional[str] = None):
+async def auth_start(return_to: Optional[str] = None, request: Request = None):
+    # Security: require HTTPS and validate origin when present
+    _require_https_and_origin(request)
+
     state = generate_state()
     conn = _get_conn()
     cur = conn.cursor()
@@ -156,9 +183,36 @@ async def auth_start(return_to: Optional[str] = None):
     return RedirectResponse(url)
 
 
+# New endpoint: request a server-generated state (recommended for client-side direct OAuth)
+@app.get('/auth/discord/state')
+async def auth_state(request: Request):
+    """Return a server-generated state token (stored in DB) for the client to use in the OAuth redirect."""
+    import logging
+    logger = logging.getLogger('discord_bot.web')
+    # Security check: require HTTPS and validate Origin/Referer matches FRONTEND_URL when present
+    _require_https_and_origin(request)
+
+    state = generate_state()
+    try:
+        conn = _get_conn()
+        cur = conn.cursor()
+        cur.execute("INSERT INTO oauth_state(state, return_to, created) VALUES (?, ?, ?)", (state, '', int(time.time())))
+        conn.commit()
+        conn.close()
+        ip = request.client.host if request.client else 'unknown'
+        logger.info('issued oauth state to %s: %s', ip, state)
+        return JSONResponse({'state': state})
+    except Exception as e:
+        logger.exception('failed to create oauth state')
+        raise HTTPException(status_code=500, detail='failed to create state')
+
+
 # OAuth callback
 @app.get("/auth/discord/callback")
-async def auth_callback(code: Optional[str] = None, state: Optional[str] = None):
+async def auth_callback(code: Optional[str] = None, state: Optional[str] = None, request: Request = None):
+    # Security: require HTTPS; Origin/Referer will be validated when present
+    _require_https_and_origin(request)
+
     if not code or not state:
         raise HTTPException(status_code=400, detail="Missing code or state")
 
@@ -269,11 +323,39 @@ async def auth_callback(code: Optional[str] = None, state: Optional[str] = None)
 
 # New endpoint: exchange code posted from frontend callback (so initial OAuth redirect does not need to hit bot-hosting.net directly)
 @app.post('/auth/discord/exchange')
-async def auth_exchange(item: Dict[str, Any]):
+async def auth_exchange(item: Dict[str, Any], request: Request):
     code = item.get('code')
     state = item.get('state')
-    if not code:
-        raise HTTPException(status_code=400, detail='missing code')
+    if not code or not state:
+        raise HTTPException(status_code=400, detail='missing code or state')
+
+    # Security check: require HTTPS and validate Origin/Referer matches FRONTEND_URL when present
+    _require_https_and_origin(request)
+
+    # validate state exists and is recent
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute('SELECT created FROM oauth_state WHERE state = ?', (state,))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=400, detail='invalid or unknown state')
+    created = int(row[0])
+    if time.time() - created > 300:
+        cur.execute('DELETE FROM oauth_state WHERE state = ?', (state,))
+        conn.commit()
+        conn.close()
+        raise HTTPException(status_code=400, detail='state expired')
+    # state is good — delete it (single use)
+    cur.execute('DELETE FROM oauth_state WHERE state = ?', (state,))
+    conn.commit()
+    conn.close()
+
+    # log attempt
+    import logging
+    logger = logging.getLogger('discord_bot.web')
+    ip = request.client.host if request.client else 'unknown'
+    logger.info('auth_exchange attempt from %s for state=%s', ip, state)
 
     # exchange code for token
     async with httpx.AsyncClient() as client:
@@ -290,20 +372,25 @@ async def auth_exchange(item: Dict[str, Any]):
             timeout=10,
         )
         if token_resp.status_code != 200:
-            raise HTTPException(status_code=400, detail=f'discord token exchange failed: {token_resp.text}')
+            text = token_resp.text
+            logger.warning('discord token exchange failed (%s): %s', token_resp.status_code, text[:1000])
+            raise HTTPException(status_code=400, detail=f'discord token exchange failed: {token_resp.status_code}')
         tdata = token_resp.json()
         acc = tdata.get('access_token')
         if not acc:
+            logger.warning('discord token exchange missing access token: %s', tdata)
             raise HTTPException(status_code=500, detail='no access token')
 
         user_r = await client.get('https://discord.com/api/users/@me', headers={'Authorization': f'Bearer {acc}'}, timeout=10)
         if user_r.status_code != 200:
+            logger.warning('failed to fetch user: %s', user_r.text[:500])
             raise HTTPException(status_code=400, detail='Failed to fetch user')
         user_json = user_r.json()
         user_id = int(user_json.get('id'))
 
         guilds_r = await client.get('https://discord.com/api/users/@me/guilds', headers={'Authorization': f'Bearer {acc}'}, timeout=10)
         if guilds_r.status_code != 200:
+            logger.warning('failed to fetch guilds: %s', guilds_r.text[:1000])
             raise HTTPException(status_code=400, detail='Failed to fetch guilds')
         guilds = guilds_r.json()
 
@@ -391,6 +478,9 @@ async def get_guild_config(guild_id: int, user=Depends(get_current_user)):
 
 @app.post("/api/guilds/{guild_id}/config")
 async def post_guild_config(guild_id: int, body: Dict[str, Any], request: Request, user=Depends(get_current_user)):
+    # Security check: require HTTPS and validate Origin/Referer matches FRONTEND_URL when present
+    _require_https_and_origin(request)
+
     # Rate limit per user
     uid = user.get("user_id")
     if not _rate_allow(f"savecfg:{uid}", limit=10, per=60):
@@ -418,6 +508,27 @@ async def post_guild_config(guild_id: int, body: Dict[str, Any], request: Reques
     cur.execute("INSERT OR REPLACE INTO guild_configs(guild_id, cfg) VALUES (?, ?)", (guild_id, json.dumps(body)))
     conn.commit()
     conn.close()
+
+    # Notify running bot (if in same process) so it can apply config immediately
+    try:
+        import logging
+        logger = logging.getLogger('discord_bot.web')
+        if BOT:
+            # Prefer an explicit coroutine on BOT to apply configs
+            if hasattr(BOT, 'apply_guild_config') and callable(getattr(BOT, 'apply_guild_config')):
+                import asyncio
+                asyncio.run_coroutine_threadsafe(BOT.apply_guild_config(guild_id, body), BOT.loop)
+                logger.info('Notified bot to apply config for guild %s', guild_id)
+            else:
+                # fallback: dispatch event the bot can listen for
+                try:
+                    BOT.dispatch('guild_config_updated', guild_id, body)
+                    logger.info('Dispatched guild_config_updated for guild %s', guild_id)
+                except Exception:
+                    logger.info('Bot present but no handler for applying config')
+    except Exception:
+        pass
+
     return {"status": "ok"}
 
 
@@ -447,6 +558,9 @@ def _get_session_by_refresh(refresh_token: str):
 
 @app.post("/auth/refresh")
 async def auth_refresh(request: Request):
+    # Security check: require HTTPS and validate Origin/Referer matches FRONTEND_URL when present
+    _require_https_and_origin(request)
+
     # Rate limit by IP
     ip = request.client.host if request.client else "unknown"
     if not _rate_allow(f"refresh:{ip}", limit=10, per=60):
@@ -494,6 +608,9 @@ async def auth_refresh(request: Request):
 
 @app.post("/auth/logout")
 async def auth_logout(request: Request):
+    # Security check: require HTTPS and validate Origin/Referer matches FRONTEND_URL when present
+    _require_https_and_origin(request)
+
     refresh_token = request.cookies.get("pollpi_refresh")
     if refresh_token:
         conn = _get_conn()
@@ -509,7 +626,9 @@ async def auth_logout(request: Request):
 # Server runner
 def run_server(host: str = "0.0.0.0", port: int = 8000):
     import uvicorn
-    uvicorn.run("discord_bot.web:app", host=host, port=port, log_level="info")
+    # Run using the app object directly so uvicorn does not try to import the package by name
+    # (this prevents "No module named 'discord_bot'" when running as a script)
+    uvicorn.run(app, host=host, port=port, log_level="info")
 
 
 def start_server_in_thread(host: str = "0.0.0.0", port: int = 8000):
