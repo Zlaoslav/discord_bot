@@ -3326,7 +3326,7 @@ def mainbotstart():
             return
 
         await channel.send(
-            f"Добро пожаловать, {member.mention}! ({member.name}, id: `{member.id}` )",
+            f"Добро пожаловать, {member.mention}! ({member.name}, id: `{member.id}` <@&1441435438366588988>)",
         )
     # ----------------------------
     # Обработчики для role_reactions
@@ -3481,6 +3481,51 @@ def mainbotstart():
             port = int(config_setings.get("WEB_PORT")) if config_setings.get("WEB_PORT") else 8000
             web.start_server_in_thread(host=host, port=port)
             logging.info(f"✅ Web server started on {host}:{port}")
+
+            # Start ngrok tunnel automatically if enabled in config
+            try:
+                from . import tunnel as tunnel_mod
+                tunnel_enabled = config_setings.get('TUNNEL_ENABLED') or False
+                if str(tunnel_enabled).lower() in ('1', 'true', 'yes'):
+                    ngrok_token = config_setings.get('TUNNEL_AUTHTOKEN') or os.getenv('NGROK_AUTHTOKEN')
+                    def _start_tunnel_thread():
+                        try:
+                            info = tunnel_mod.start_tunnel(local_port=port, authtoken=ngrok_token)
+                            url = info.get('public_url')
+                            secret = info.get('secret')
+                            logging.info(f"✅ Tunnel started: {url}")
+
+                            # notify via status webhook if present
+                            webhook = config_setings.get('STATUS_WEBHOOK_URL')
+                            if webhook:
+                                try:
+                                    import httpx
+                                    httpx.post(webhook, json={"content": f"Tunnel started: {url}"}, timeout=10)
+                                except Exception:
+                                    logging.exception('Failed to post tunnel URL to webhook')
+
+                            # notify user by DM if configured
+                            notify_user = config_setings.get('TUNNEL_NOTIFY_USER_ID')
+                            if notify_user:
+                                try:
+                                    import asyncio
+                                    async def _send_dm():
+                                        try:
+                                            uid = int(notify_user)
+                                            u = bot.get_user(uid) or await bot.fetch_user(uid)
+                                            await u.send(f"Tunnel started: {url}\nAdd this URL to BACKEND_URL in the frontend or proxy it via Netlify.")
+                                        except Exception:
+                                            logging.exception('Failed to DM tunnel url')
+                                    asyncio.run_coroutine_threadsafe(_send_dm(), bot.loop)
+                                except Exception:
+                                    logging.exception('Failed to schedule DM')
+
+                        except Exception:
+                            logging.exception('Failed to start tunnel')
+                    t = threading.Thread(target=_start_tunnel_thread, daemon=True)
+                    t.start()
+            except Exception:
+                logging.exception('Failed to start ngrok tunnel')
         except Exception as e:
             logging.warning(f"Не удалось запустить web server: {e}")
 

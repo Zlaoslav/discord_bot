@@ -99,6 +99,14 @@ def _init_db():
             cfg TEXT
         )
     """)
+    # store active tunnels (public_url, secret, created)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS tunnels (
+            public_url TEXT,
+            secret TEXT,
+            created INTEGER
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -147,15 +155,37 @@ def _origin_base_from_header(h: Optional[str]) -> Optional[str]:
         return None
 
 
+def _get_latest_tunnel_secret() -> Optional[str]:
+    try:
+        conn = _get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT secret FROM tunnels ORDER BY created DESC LIMIT 1")
+        row = cur.fetchone()
+        conn.close()
+        if not row:
+            return None
+        return row[0]
+    except Exception:
+        return None
+
+
 def _require_https_and_origin(request: Request):
     # Enforce HTTPS (honor X-Forwarded-Proto when present) and check Origin/Referer matches FRONTEND_URL if provided
     proto = request.headers.get('x-forwarded-proto') or request.url.scheme
     if proto != 'https':
-        raise HTTPException(status_code=403, detail='Insecure connection — use HTTPS')
+        # allow when tunneled via ngrok (ngrok presents https externally) — but keep check for tunnel secret header
+        secret = request.headers.get('X-TUNNEL-SECRET')
+        latest = _get_latest_tunnel_secret()
+        if not secret or (latest and secret != latest):
+            raise HTTPException(status_code=403, detail='Insecure connection — use HTTPS')
     origin = request.headers.get('origin') or request.headers.get('referer')
     origin_base = _origin_base_from_header(origin) if origin else None
     if origin_base and origin_base != FRONTEND_URL:
-        raise HTTPException(status_code=403, detail='Invalid request origin')
+        # allow when valid tunnel secret provided
+        secret = request.headers.get('X-TUNNEL-SECRET')
+        latest = _get_latest_tunnel_secret()
+        if not secret or (latest and secret != latest):
+            raise HTTPException(status_code=403, detail='Invalid request origin')
 
 
 # OAuth start (legacy; server-generated redirect)

@@ -11,3 +11,4 @@ uvicorn[standard]
 httpx
 python-jose[cryptography]
 jose
+pyngrok
