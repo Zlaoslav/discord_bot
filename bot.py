@@ -3061,13 +3061,10 @@ def mainbotstart():
     # ----------------------------
     # ОБРАБОТКА TEMPVOICE СООБЩЕНИЙ
     # ----------------------------   
-
-    @bot.event
-    async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+    async def on_tempvoice(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         # Игнорировать ботов (включая самого бота)
         if member.bot:
             return
-
         # Пользователь зашёл в канал (или переместился)
         try:
             # если вошёл в канал
@@ -3210,8 +3207,7 @@ def mainbotstart():
     # Время войс чата
     # ----------------------------
     voice_join_time = {}  # key = (guild_id, user_id), value = timestamp
-    @bot.event
-    async def on_voice_state_update(member, before, after):
+    async def on_voice_join_time(member, before, after):
         key = (member.guild.id, member.id)
         now = time.time()
 
@@ -3233,6 +3229,11 @@ def mainbotstart():
                 duration = int(now - join_time)
                 add_voice_time(member.guild.id, member.id, duration)
                 voice_join_time[key] = now
+    
+    @bot.event
+    async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        await on_tempvoice(member, before, after)
+        await on_voice_join_time(member, before, after)
     # ----------------------------
     # ОБРАБОТКА ОСТАЛЬНЫХ СООБЩЕНИЙ
     # ----------------------------      
