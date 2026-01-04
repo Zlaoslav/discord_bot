@@ -1116,7 +1116,7 @@ async def save_minecraft_panel(
     conn.commit()
 
 
-async def get_minecraft_panels() -> List[Tuple[int, str, int, int]]:
+async def get_minecraft_panels() -> list[tuple[int, str, int, int]]:
     """
     Возвращает список всех панелей:
     (guild_id, server_ip, channel_id, message_id)
