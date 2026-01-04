@@ -12,3 +12,5 @@ httpx
 python-jose[cryptography]
 jose
 pyngrok
+
+mcstatus
