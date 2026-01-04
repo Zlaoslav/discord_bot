@@ -31,6 +31,8 @@ from google import genai
 
 import yt_dlp
 
+from mcstatus import JavaServer
+
 # ------------------ main vars setup ------------------
 SCRIPT_DIR = Path(__file__).parent
 USERNAME = os.getenv("USERNAME") or "unknown"
@@ -387,6 +389,15 @@ def _init_db():
             PRIMARY KEY (guild_id, level)
         );
     """)
+    # Таблица панелей майнкрафта
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS minecraft_panels (
+            guild_id INTEGER,
+            server_ip TEXT,
+            channel_id INTEGER,
+            message_id INTEGER
+        )
+        """)
     conn.commit()
     conn.close()
 
@@ -1083,6 +1094,157 @@ def get_all_temp_channels_for_trigger(trigger_channel_id: int) -> list[int]:
         return []
     m = rec.get("current_map") or {}
     return [v.get("voice") for v in m.values() if v.get("voice")]
+
+
+
+# ------------------ minecraft setup ------------------
+async def save_minecraft_panel(
+    guild_id: int,
+    server_ip: str,
+    channel_id: int,
+    message_id: int
+) -> None:
+    """Сохраняет панель сервера."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute(
+        "INSERT INTO panels (guild_id, server_ip, channel_id, message_id) VALUES (?, ?, ?, ?)",
+        (guild_id, server_ip, channel_id, message_id)
+    )
+
+    conn.commit()
+
+
+async def get_minecraft_panels() -> List[Tuple[int, str, int, int]]:
+    """
+    Возвращает список всех панелей:
+    (guild_id, server_ip, channel_id, message_id)
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("SELECT guild_id, server_ip, channel_id, message_id FROM panels")
+    rows = cur.fetchall()
+
+    conn.close()
+    return rows
+
+
+def delete_minecraft_panel(message_id: int) -> None:
+    """Удаляет панель по message_id."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("DELETE FROM panels WHERE message_id = ?", (message_id,))
+
+    conn.commit()
+    conn.close()
+
+
+async def get_server_info(ip):
+    server = JavaServer.lookup(ip)
+
+    try:
+        status = server.status()
+        query = None
+        try:
+            query = server.query()
+        except:
+            pass
+
+        players = []
+        if query and query.players.names:
+            players = query.players.names
+
+        return {
+            "online": True,
+            "players_online": status.players.online,
+            "players_max": status.players.max,
+            "players": players,
+            "icon": status.icon
+        }
+
+    except:
+        return {
+            "online": False
+        }
+
+
+class MinecraftPlayersView(discord.ui.View):
+    def __init__(self, players):
+        super().__init__(timeout=60)
+        self.players = players
+
+    @discord.ui.button(label="Показать игроков", style=discord.ButtonStyle.primary)
+    async def show_players(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.players:
+            await interaction.response.send_message(
+                "Список игроков пуст или скрыт сервером",
+                ephemeral=True
+            )
+            return
+
+        text = "\n".join(self.players)
+
+        if len(text) <= 2000:
+            await interaction.response.send_message(text, ephemeral=True)
+        else:
+            for chunk in [text[i:i+1900] for i in range(0, len(text), 1900)]:
+                await interaction.followup.send(chunk, ephemeral=True)
+
+
+async def create_minecraft_panel(ip):
+    data = await get_server_info(ip)
+
+    if not data["online"]:
+        embed = discord.Embed(
+            title=f"🟥 {ip}",
+            description="Сервер офлайн",
+            color=discord.Color.red()
+        )
+        return embed, None
+
+    embed = discord.Embed(
+        title=f"🟩 {ip}",
+        color=discord.Color.green()
+    )
+
+    embed.add_field(
+        name="Игроки",
+        value=f'{data["players_online"]}/{data["players_max"]}',
+        inline=True
+    )
+
+    if data.get("icon"):
+        embed.set_thumbnail(url="attachment://icon.png")
+
+    view = MinecraftPlayersView(data["players"])
+    return embed, view
+
+@tasks.loop(seconds=30)
+async def update_panels_task():
+    for guild_id, ip, channel_id, message_id in get_minecraft_panels():
+        guild = bot.get_guild(guild_id)
+        if not guild:
+            continue
+
+        channel = guild.get_channel(channel_id)
+        if not channel:
+            continue
+
+        try:
+            message = await channel.fetch_message(message_id)
+            embed, view = await create_panel(ip)
+            await message.edit(embed=embed, view=view)
+        except discord.NotFound:
+            # сообщение удалили — можно убрать из БД
+            delete_minecraft_panel(message_id)
+        except discord.Forbidden:
+            pass
+        except Exception as e:
+            print(f"[PANEL ERROR] {ip}: {e}")
+
 
 # ------------------ customplay helpers ------------------
 YTDL_OPTS = {
@@ -3202,6 +3364,23 @@ def mainbotstart():
 
 
 
+    # ----------------------------
+    # SLASH: /send_minecraft_panel [ip]
+    # ----------------------------
+    @tree.command(name="send_minecraft_panel", description="Создать панель сервера")
+    @app_commands.describe(ip="IP сервера Minecraft")
+    async def send_minecraft_panel(interaction: discord.Interaction, ip: str):
+        await interaction.response.defer()
+
+        embed, view = await create_panel(ip)
+        msg = await interaction.followup.send(embed=embed, view=view)
+
+        save_panel(
+            interaction.guild_id,
+            ip,
+            interaction.channel_id,
+            msg.id
+        )
 
     # ----------------------------
     # Время войс чата
@@ -3529,6 +3708,9 @@ def mainbotstart():
                 logging.exception('Failed to start ngrok tunnel')
         except Exception as e:
             logging.warning(f"Не удалось запустить web server: {e}")
+
+        if not update_panels_task.is_running():
+            update_panels_task.start()
 
 #        try:
 #            synced = await sync_local_slash()
