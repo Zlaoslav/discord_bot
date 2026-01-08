@@ -25,7 +25,7 @@ import ast
 from playwright.async_api import async_playwright
 
 import configs_folder.perms_manager as perms_manager
-import chem_reactions 
+import chem_reactions
 
 from google import genai
 
@@ -212,7 +212,7 @@ class SoundSelect(Select):
             await interaction.response.send_message("ffmpeg не найден.", ephemeral=True)
             logging.error(f"FFMPEG not found at: {FFMPEG_PATH}")
             return
-        
+
         # Проверяем и устанавливаем права на выполнение если нужно
         try:
             import stat
@@ -222,7 +222,7 @@ class SoundSelect(Select):
                 logging.info(f"Установлены права на выполнение для {FFMPEG_PATH}")
         except Exception as e:
             logging.warning(f"Не удалось установить права на выполнение ffmpeg: {e}")
-        
+
         sound_filename = self.values[0]
         sound_path = os.path.join(SOUNDS_DIR, sound_filename)
         if not os.path.isfile(sound_path):
@@ -233,7 +233,7 @@ class SoundSelect(Select):
         if interaction.guild is None:
             await interaction.response.send_message("Команда доступна только на сервере.", ephemeral=True)
             return
-        
+
         vc = interaction.guild.voice_client
         if vc is None:
             await interaction.response.send_message(
@@ -321,7 +321,7 @@ def _init_db():
     """)
     # гарантируем одну строку с id=1
     cur.execute("INSERT OR IGNORE INTO restart_state (id, channel_id) VALUES (1, NULL);")
-    
+
     # Таблица для join_leave
     cur.execute("""
         CREATE TABLE IF NOT EXISTS join_leave (
@@ -331,7 +331,7 @@ def _init_db():
     """)
     # гарантируем одну строку с id=1
     cur.execute("INSERT OR IGNORE INTO join_leave (id, channel_id) VALUES (1, NULL);")
-    
+
     # Таблица для role_reaction (реакции с автоматической выдачей ролей)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS role_reactions (
@@ -604,32 +604,38 @@ async def on_xp_added(guild_id: int, user_id: int):
         if not member:
             return
 
-        rewards = get_level_rewards(guild_id)
+        rewards = get_level_rewards(guild_id)  # список кортежей (уровень, role_id)
+        # Сортируем по уровню, чтобы найти максимальный подходящий
+        rewards_sorted = sorted(rewards, key=lambda x: x[0])
 
+        # Определяем роль за максимальный уровень, которую должен иметь пользователь
+        max_role_to_give = None
+        for required_level, role_id in rewards_sorted:
+            if new_level >= required_level:
+                max_role_to_give = guild.get_role(role_id)
+
+        # Убираем все роли за уровни, кроме максимальной
         for required_level, role_id in rewards:
             role = guild.get_role(role_id)
             if not role:
                 continue
+            if role in member.roles:
+                if role != max_role_to_give:
+                    try:
+                        await member.remove_roles(role, reason="Removed old level role")
+                    except Exception as e:
+                        logging.warning(
+                            f"Не удалось забрать роль {role_id} у пользователя {user_id}: {e}"
+                        )
 
-            has_role = role in member.roles
-
-            # уровень достаточный — выдаём роль
-            if new_level >= required_level and not has_role:
-                try:
-                    await member.add_roles(role, reason="Level reward")
-                except Exception as e:
-                    logging.warning(
-                        f"Не удалось выдать роль {role_id} пользователю {user_id}: {e}"
-                    )
-
-            # уровень недостаточный — забираем роль
-            elif new_level < required_level and has_role:
-                try:
-                    await member.remove_roles(role, reason="Level reward removed")
-                except Exception as e:
-                    logging.warning(
-                        f"Не удалось забрать роль {role_id} у пользователя {user_id}: {e}"
-                    )
+        # Выдаём роль за максимальный уровень, если её ещё нет
+        if max_role_to_give and max_role_to_give not in member.roles:
+            try:
+                await member.add_roles(max_role_to_give, reason="Level reward")
+            except Exception as e:
+                logging.warning(
+                    f"Не удалось выдать роль {max_role_to_give.id} пользователю {user_id}: {e}"
+                )
 
         # уведомление о повышении уровня
         if new_level > old_level:
@@ -647,6 +653,7 @@ async def on_xp_added(guild_id: int, user_id: int):
 
     except Exception as e:
         logging.exception(f"Ошибка в on_xp_added: {e}")
+
 
 USER_LEVEL_COOLDOWN = 60
 user_level_last_calls = {}
@@ -1493,7 +1500,7 @@ def inc_counter() -> None:
 
 
 # ----------------------------
-# очистка и восстановление локальных команд 
+# очистка и восстановление локальных команд
 # ----------------------------
 async def sync_local_slash():
     try:
@@ -1748,7 +1755,7 @@ def mainbotstart():
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logging.debug(f"{interaction.user.name} try use roles")
             return
-        
+
         if interaction.guild is None:
             await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=True)
             return
@@ -1818,8 +1825,8 @@ def mainbotstart():
     # ----------------------------
     @bot.tree.command(name="editperms", description="Добавить/удалить роль пользователю (permsmanager+)")
     async def editperms(
-        interaction: discord.Interaction, 
-        member: discord.Member, 
+        interaction: discord.Interaction,
+        member: discord.Member,
         set: bool
     ):
         if interaction.guild is None:
@@ -1887,12 +1894,12 @@ def mainbotstart():
         if interaction.guild is None:
             await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=True)
             return
-        
+
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.HOST):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logging.debug(f"{interaction.user.name} try use toggle_role")
             return
-        
+
         bot_member = interaction.guild.me
         if bot_member is None:
             await interaction.response.send_message("Не удалось получить данные бота на сервере.", ephemeral=True)
@@ -1927,12 +1934,12 @@ def mainbotstart():
         if interaction.guild is None:
             await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=True)
             return
-        
+
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logging.debug(f"{interaction.user.name} try use toggle_role")
             return
-        
+
         bot_member = interaction.guild.me
         if bot_member is None:
             await interaction.response.send_message("Не удалось получить данные бота на сервере.", ephemeral=True)
@@ -1979,12 +1986,12 @@ def mainbotstart():
         if interaction.guild is None:
             await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
             return
-        
+
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logging.debug(f"{interaction.user.name} try use say")
             return
-        
+
         error_message = None
         targetchanel = channel or interaction.channel
 
@@ -2086,7 +2093,7 @@ def mainbotstart():
         unset_counter_channel()
         await interaction.response.send_message("Счётчик отключён.", ephemeral=True)
     # --- Обработчик входящих сообщений ---
- 
+
     async def on_counting_message(message: discord.Message):
     # игнорируем ботов
         if message.author.bot:
@@ -2153,7 +2160,7 @@ def mainbotstart():
         if interaction.guild is None:
             await interaction.followup.send("Эта команда работает только на сервере.", ephemeral=False)
             return
-        
+
         # OWNER и HOST игнорируют лимит
         is_privileged = perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER) or perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.HOST)
 
@@ -2170,19 +2177,19 @@ def mainbotstart():
                 increment_user_daily_count(interaction.user.id)
 
             response = ask_gemini(usermessage)
-            
+
             # Разбиваем ответ на сообщения по 1900 символов
             chunk_size = 1900
             max_chunks = 20
             chunks = [response[i:i+chunk_size] for i in range(0, len(response), chunk_size)][:max_chunks]
-            
+
             for chunk in chunks:
                 chunk = chunk.replace("```", "")
                 if chunk.strip():  # Пропускаем пустые чанки
                     await interaction.followup.send(f"```markdown\n{chunk}\n```", ephemeral=False)
         except Exception as e:
             await interaction.followup.send(f"Erorr: {e}", ephemeral=False)
-    
+
     # ----------------------------
     # SLASH: /stopsound
     # ----------------------------
@@ -2191,12 +2198,12 @@ def mainbotstart():
         if interaction.guild is None:
             await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
             return
-        
+
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.SOUNDPAD):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=False)
             logging.debug(f"{interaction.user.name} try use stopsound")
             return
-        
+
         voice_client = interaction.guild.voice_client
         if voice_client is None or not voice_client.is_connected():
             await interaction.response.send_message("Бот не подключен к голосовому каналу.", ephemeral=False)
@@ -2217,13 +2224,13 @@ def mainbotstart():
         if interaction.guild is None:
             await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
             return
-        
+
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.LEAVE):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=False)
             logging.debug(f"{interaction.user.name} try use leave")
             return
-        
-        
+
+
         try:
             await interaction.guild.voice_client.disconnect()
 
@@ -2245,12 +2252,12 @@ def mainbotstart():
         if interaction.guild is None:
             await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
             return
-        
+
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logging.debug(f"{interaction.user.name} try use demute")
             return
-        
+
         if mute == None and deafen == None:
             await interaction.response.send_message("Укажите хотя бы 1 аргумент!.", ephemeral=True)
             return
@@ -2265,8 +2272,8 @@ def mainbotstart():
         except Exception as e:
             await interaction.response.send_message("Ошибка! Вероятно у бота недостаточно прав.", ephemeral=True)
             logging.warning(e)
-        
-        
+
+
     # ----------------------------
     # SLASH: /join message
     # ----------------------------
@@ -2280,16 +2287,16 @@ def mainbotstart():
         if interaction.guild is None:
             await interaction.followup.send("Эта команда работает только на сервере.", ephemeral=False)
             return
-        
+
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.JOIN):
             await interaction.followup.send("У вас недостаточно прав использовать эту команду!.", ephemeral=False)
             logging.debug(f"{interaction.user.name} try use join")
             return
-        
+
         try:
             if channel == None:
                 channel = interaction.user.voice.channel
-        
+
             if interaction.guild.voice_client:
                 await interaction.guild.voice_client.move_to(channel)
             else:
@@ -2309,12 +2316,12 @@ def mainbotstart():
         if interaction.guild is None:
             await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
             return
-        
+
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.SOUNDPAD):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logging.debug(f"{interaction.user.name} try use soundpanel ({interaction.user.id})")
             return
-        
+
         sounds = list_sounds()
         if not sounds:
             await interaction.response.send_message("Список звуков пуст.", ephemeral=True)
@@ -2368,7 +2375,7 @@ def mainbotstart():
     @bot.tree.command(name="d20", description="Подкинуть кубик d20")
     async def d20(interaction: discord.Interaction):
         await interaction.response.send_message("Подкинув кубик d20 выпало: `" + str(random.randint(1, 20)) + "`")
-    
+
     @bot.tree.command(name="d100", description="Подкинуть кубик d100")
     async def d100(interaction: discord.Interaction):
         await interaction.response.send_message("Подкинув кубик d100 выпало: `" + str(random.randint(1, 100)) + "`")
@@ -2392,25 +2399,25 @@ def mainbotstart():
     )
     async def role_reaction(interaction: discord.Interaction, emoji: str, role: discord.Role):
         """Создаёт сообщение в канале с реакцией, которая выдаёт роль."""
-        
+
         # Проверяем права
         if not interaction.user.guild_permissions.manage_roles:
             await interaction.response.send_message("❌ У вас нет прав на управление ролями.", ephemeral=True)
             return
-        
+
         bot_member = interaction.guild.get_member(bot.user.id)
         if not bot_member or not bot_member.guild_permissions.manage_roles:
             await interaction.response.send_message("❌ У бота нет прав на управление ролями.", ephemeral=True)
             return
-        
+
         if role.position >= bot_member.top_role.position:
             await interaction.response.send_message("❌ Не могу управлять этой ролью. Роль выше или равна роли бота.", ephemeral=True)
             return
-        
+
         # Отправляем сообщение в канал
         channel = interaction.channel
         message = await channel.send(f"Нажмите {emoji} чтобы получить роль {role.mention}")
-        
+
         # Добавляем реакцию
         try:
             await message.add_reaction(emoji)
@@ -2418,7 +2425,7 @@ def mainbotstart():
             await interaction.response.send_message(f"❌ Не удалось добавить реакцию: {e}", ephemeral=True)
             await message.delete()
             return
-        
+
         # Сохраняем в БД
         try:
             save_role_reaction(message.id, channel.id, emoji, role.id)
@@ -2426,7 +2433,7 @@ def mainbotstart():
             await interaction.response.send_message(f"❌ Ошибка при сохранении в БД: {e}", ephemeral=True)
             await message.delete()
             return
-        
+
         await interaction.response.send_message(
             f"✅ Сообщение создано! Реакция: {emoji}, Роль: {role.mention}",
             ephemeral=True
@@ -2441,7 +2448,7 @@ def mainbotstart():
         if interaction.guild is None:
             await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
             return
-        
+
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=False)
             logging.debug(f"{interaction.user.name} try use set_new_member_channel")
@@ -3067,7 +3074,7 @@ def mainbotstart():
     # ----------------------------
     @bot.tree.command(name="chemical_reactions", description="Анализ и генерация возможных уравнений реакции по списку реагентов (owner only)")
     async def chemical_reactions(interaction: discord.Interaction, reactants: str):
-        
+
         await interaction.response.defer(ephemeral=False)
 
 
@@ -3125,7 +3132,7 @@ def mainbotstart():
             await interaction.followup.send("Показаны первые 5 вариантов в каждой категории. Уточните запрос для более узкого вывода.", ephemeral=True)
 
         return
-    
+
 
     # ----------------------------
     # SLASH: /play [query]
@@ -3188,7 +3195,7 @@ def mainbotstart():
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.CUSTOMPLAY):
             await interaction.response.send_message("У вас недостаточно прав.", ephemeral=True)
             return
-        
+
         if vc and vc.is_connected():
             if vc.is_playing():
                 vc.stop()
@@ -3214,7 +3221,7 @@ def mainbotstart():
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.CUSTOMPLAY):
             await interaction.response.send_message("У вас недостаточно прав.", ephemeral=True)
             return
-        
+
         if vc and vc.is_playing():
             vc.stop()  # корректно триггерит play_next через after
             await interaction.response.send_message("⏭ Трек пропущен.")
@@ -3222,7 +3229,7 @@ def mainbotstart():
             await interaction.response.send_message("Ничего не играет.")
     # ----------------------------
     # ОБРАБОТКА TEMPVOICE СООБЩЕНИЙ
-    # ----------------------------   
+    # ----------------------------
     async def on_tempvoice(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         # Игнорировать ботов (включая самого бота)
         if member.bot:
@@ -3408,18 +3415,18 @@ def mainbotstart():
                 duration = int(now - join_time)
                 add_voice_time(member.guild.id, member.id, duration)
                 voice_join_time[key] = now
-    
+
     @bot.event
     async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         await on_tempvoice(member, before, after)
         await on_voice_join_time(member, before, after)
     # ----------------------------
     # ОБРАБОТКА ОСТАЛЬНЫХ СООБЩЕНИЙ
-    # ----------------------------      
+    # ----------------------------
     async def on_sus_message(message):
         if message.author.bot:
             return
-        
+
         msglow = message.content.lower()
 
         if "<@1409084528588488727>" in msglow:
@@ -3431,16 +3438,16 @@ def mainbotstart():
 
         if r"||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​" in msglow:
             await message.reply(r"https://tenor.com/view/ghost-ping-troll-discord-gif-20744771", mention_author=True)
-        
+
         if "@everyone" in msglow:
             await message.reply(r"https://tenor.com/view/everyone-discord-konosuba-gif-21395141", mention_author=True, delete_after=15)
-        
+
         if "@here" in msglow:
             await message.reply(r"https://tenor.com/view/everyone-discord-gif-18237159", mention_author=True, delete_after=15)
-        
+
         if "да" == msglow:
             if random.randint(1, 50) == 1:
-                await message.reply(r"пизда", mention_author=True, delete_after=60)   
+                await message.reply(r"пизда", mention_author=True, delete_after=60)
 
         if "нет" == msglow:
             if random.randint(1, 50) == 1:
@@ -3449,13 +3456,13 @@ def mainbotstart():
         if "агу" in msglow or "уээ" in msglow:
             if random.randint(1, 50) == 1:
                 await message.reply(r"ливни с жизни ущербный ||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​|| _ _ _ _ _ _ https://tenor.com/view/son-agu-aaguu-aguu-aaaguu-gif-15295315305516131924", mention_author=True, delete_after=60)
-        
+
         TENOR_RE = re.compile(r"https?://(?:www\.)?tenor\.com", re.IGNORECASE)
         DS_RE = re.compile(r"https://media.discordapp.net/")
         if TENOR_RE.search(message.content or "") or DS_RE.search(message.content or ""):
             # получаем права автора именно в этом канале
             perms = message.channel.permissions_for(message.author)
-            # attach_files — право прикреплять файлы/гифки      
+            # attach_files — право прикреплять файлы/гифки
             if not perms.attach_files:
                 # проверяем, может ли бот писать в канал
                 bot_perms = message.channel.permissions_for(message.guild.me if message.guild else bot.user)
@@ -3474,7 +3481,7 @@ def mainbotstart():
                     "https://tenor.com/view/no-gif-no-gif-perms-gif-27679658",
                     mention_author=True
                     )
-                
+
     # ----------------------------
     # Обработчики для выхода участника
     # ----------------------------
@@ -3483,7 +3490,7 @@ def mainbotstart():
         channel_id = get_join_leave_channel()
         if channel_id == None:
             return
-        
+
         channel = member.guild.get_channel(channel_id)
         if channel is None:
             return
@@ -3500,7 +3507,7 @@ def mainbotstart():
         channel_id = get_join_leave_channel()
         if channel_id == None:
             return
-        
+
         channel = member.guild.get_channel(channel_id)
         if channel is None:
             return
@@ -3524,35 +3531,35 @@ def mainbotstart():
         """Обработчик добавления реакции."""
         if payload.user_id == bot.user.id:
             return  # Игнорируем реакции самого бота
-        
+
         # Получаем информацию о роле из БД
         emoji_str = str(payload.emoji)
         role_data = get_role_reaction(payload.message_id, emoji_str)
-        
+
         if not role_data:
             return  # Нет роли для этой реакции
-        
+
         try:
             guild = bot.get_guild(payload.guild_id)
             if not guild:
                 return
-            
+
             member = guild.get_member(payload.user_id)
             if not member:
                 member = await guild.fetch_member(payload.user_id)
-            
+
             role_id = role_data[3]
             role = guild.get_role(role_id)
-            
+
             if not role:
                 return
-            
+
             # Проверяем, есть ли уже роль у пользователя
             had_role = role in member.roles
-            
+
             if not had_role:
                 await member.add_roles(role, reason=f"Role reaction на {emoji_str}")
-            
+
             # Отправляем личное сообщение пользователю
             try:
                 if had_role:
@@ -3583,42 +3590,42 @@ def mainbotstart():
         if member.bot:
             return  # реакция от бота, игнорируем
         try_give_xp(payload.guild_id, payload.user_id)
-    
-    
+
+
     @bot.event
     async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
         """Обработчик удаления реакции."""
         if payload.user_id == bot.user.id:
             return  # Игнорируем реакции самого бота
-        
+
         # Получаем информацию о роле из БД
         emoji_str = str(payload.emoji)
         role_data = get_role_reaction(payload.message_id, emoji_str)
-        
+
         if not role_data:
             return  # Нет роли для этой реакции
-        
+
         try:
             guild = bot.get_guild(payload.guild_id)
             if not guild:
                 return
-            
+
             member = guild.get_member(payload.user_id)
             if not member:
                 member = await guild.fetch_member(payload.user_id)
-            
+
             role_id = role_data[3]
             role = guild.get_role(role_id)
-            
+
             if not role:
                 return
-            
+
             # Проверяем, есть ли роль у пользователя
             had_role = role in member.roles
-            
+
             if had_role:
                 await member.remove_roles(role, reason=f"Удалена реакция на {emoji_str}")
-            
+
             # Отправляем личное сообщение пользователю
             try:
                 if had_role:
@@ -3637,17 +3644,17 @@ def mainbotstart():
         await on_sus_message(message)
         if message.guild and not message.author.bot:
             try_give_xp(message.guild.id, message.author.id)
-    
 
-        
-    
+
+
+
 
     # ----------------------------
     # on_ready: синхронизация слэш-команд
     # ----------------------------
     @bot.event
     async def on_ready():
-        
+
         try:
             await notify_after_restart()
         except Exception as e:
