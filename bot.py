@@ -15,7 +15,7 @@ import datetime
 import threading
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord.ui import View, Select
 import discord.app_commands
 
@@ -391,11 +391,14 @@ def _init_db():
     """)
     # Таблица панелей майнкрафта
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS minecraft_panels (
-            guild_id INTEGER,
-            server_ip TEXT,
-            channel_id INTEGER,
-            message_id INTEGER
+        CREATE TABLE IF NOT EXISTS minecraft_panels_v2 (
+            guild_id INTEGER NOT NULL,
+            server_ip TEXT NOT NULL,
+            server_port INTEGER NOT NULL,
+            query_port INTEGER,
+            channel_id INTEGER NOT NULL,
+            message_id INTEGER NOT NULL,
+            PRIMARY KEY (guild_id, message_id)
         )
         """)
     conn.commit()
@@ -1108,130 +1111,162 @@ def get_all_temp_channels_for_trigger(trigger_channel_id: int) -> list[int]:
 async def save_minecraft_panel(
     guild_id: int,
     server_ip: str,
+    server_port: int,
+    query_port: int | None,
     channel_id: int,
     message_id: int
-) -> None:
-    """Сохраняет панель сервера."""
+):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-
     cur.execute(
-        "INSERT INTO panels (guild_id, server_ip, channel_id, message_id) VALUES (?, ?, ?, ?)",
-        (guild_id, server_ip, channel_id, message_id)
+        """
+        INSERT INTO minecraft_panels_v2
+        (guild_id, server_ip, server_port, query_port, channel_id, message_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (guild_id, server_ip, server_port, query_port, channel_id, message_id)
     )
-
     conn.commit()
+    conn.close()
+
+    print(f"[PANEL ADD] {server_ip}:{server_port} (query={query_port}) → guild {guild_id}, channel {channel_id}")
 
 
-async def get_minecraft_panels() -> list[tuple[int, str, int, int]]:
-    """
-    Возвращает список всех панелей:
-    (guild_id, server_ip, channel_id, message_id)
-    """
+
+async def get_minecraft_panels():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-
-    cur.execute("SELECT guild_id, server_ip, channel_id, message_id FROM panels")
+    cur.execute("""
+        SELECT guild_id, server_ip, server_port, query_port, channel_id, message_id
+        FROM minecraft_panels_v2
+    """)
     rows = cur.fetchall()
-
     conn.close()
     return rows
 
 
-def delete_minecraft_panel(message_id: int) -> None:
-    """Удаляет панель по message_id."""
+
+def delete_minecraft_panel(message_id: int):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-
-    cur.execute("DELETE FROM panels WHERE message_id = ?", (message_id,))
-
+    cur.execute("DELETE FROM minecraft_panels_v2 WHERE message_id = ?", (message_id,))
     conn.commit()
     conn.close()
 
 
-async def get_server_info(ip):
-    server = JavaServer.lookup(ip)
+async def get_server_info(ip: str, query_port: int | None = None):
+    """
+    Возвращает информацию о сервере Minecraft:
+    - статус онлайн/офлайн
+    - игроков онлайн / макс
+    - список игроков (через query, если query_port задан)
+    - иконка
+    - источник данных ("ping" или "query")
+    """
 
+    # создаём объект для ping/status
     try:
+        server = JavaServer.lookup(ip)
         status = server.status()
-        query = None
+        logging.info(f"[DEBUG] Статус сервера {ip}: онлайн={status.players.online}/{status.players.max}")
+    except Exception as e:
+        logging.error(f"[DEBUG] Сервер офлайн или ошибка: {e}")
+        return {
+            "online": False,
+            "players_online": 0,
+            "players_max": 0,
+            "players": [],
+            "icon": None,
+            "source": "offline"
+        }
+
+    # по умолчанию список игроков пуст, источник ping
+    players = []
+    source = "ping"
+
+    # query — только для кнопки игроков
+    if query_port:
         try:
-            query = server.query()
-        except:
-            pass
+            query_server = JavaServer.lookup(f"{ip}:{query_port}")
+            query = query_server.query()
+            logging.info(f"[DEBUG] Query сработал, игроки: {query.players.names}")
+            if query.players.names:
+                players = query.players.names
+                source = "query"
+        except Exception as e:
+            logging.warning(f"[DEBUG] Query не сработал: {e}")
 
-        players = []
-        if query and query.players.names:
-            players = query.players.names
-
-        return {
-            "online": True,
-            "players_online": status.players.online,
-            "players_max": status.players.max,
-            "players": players,
-            "icon": status.icon
-        }
-
-    except:
-        return {
-            "online": False
-        }
-
+    return {
+        "online": True,
+        "players_online": status.players.online,
+        "players_max": status.players.max,
+        "players": players,
+        "icon": status.icon,
+        "source": source
+    }
 
 class MinecraftPlayersView(discord.ui.View):
-    def __init__(self, players):
-        super().__init__(timeout=60)
+    def __init__(self, players: list[str], source: str):
+        super().__init__(timeout=120)
         self.players = players
+        self.source = source
 
-    @discord.ui.button(label="Показать игроков", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="👥 Показать игроков", style=discord.ButtonStyle.primary)
     async def show_players(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not self.players:
             await interaction.response.send_message(
-                "Список игроков пуст или скрыт сервером",
+                "❌ Список игроков пуст или скрыт сервером",
                 ephemeral=True
             )
             return
 
-        text = "\n".join(self.players)
-
-        if len(text) <= 2000:
-            await interaction.response.send_message(text, ephemeral=True)
-        else:
-            for chunk in [text[i:i+1900] for i in range(0, len(text), 1900)]:
-                await interaction.followup.send(chunk, ephemeral=True)
-
-
-async def create_minecraft_panel(ip):
-    data = await get_server_info(ip)
-
-    if not data["online"]:
-        embed = discord.Embed(
-            title=f"🟥 {ip}",
-            description="Сервер офлайн",
-            color=discord.Color.red()
+        header = (
+            f"👥 **Игроки онлайн:** {len(self.players)}\n"
+            f"📡 **Источник:** `{self.source}`\n\n"
         )
-        return embed, None
+
+        chunks = []
+        current = header
+
+        for name in self.players:
+            line = f"• {name}\n"
+            if len(current) + len(line) > 1900:
+                chunks.append(current)
+                current = ""
+            current += line
+
+        if current:
+            chunks.append(current)
+
+        await interaction.response.send_message(chunks[0], ephemeral=True)
+        for chunk in chunks[1:]:
+            await interaction.followup.send(chunk, ephemeral=True)
+
+
+
+async def create_minecraft_panel(ip: str, port: int = 25565, query_port: int | None = None):
+    data = await get_server_info(ip, query_port=query_port)
 
     embed = discord.Embed(
-        title=f"🟩 {ip}",
-        color=discord.Color.green()
+        title=f"{'🟩' if data['online'] else '🟥'} {ip}:{port}",
+        color=discord.Color.green() if data["online"] else discord.Color.red()
     )
 
     embed.add_field(
         name="Игроки",
-        value=f'{data["players_online"]}/{data["players_max"]}',
+        value=f"{data['players_online']}/{data['players_max']}",
         inline=True
     )
 
-    if data.get("icon"):
-        embed.set_thumbnail(url="attachment://icon.png")
-
-    view = MinecraftPlayersView(data["players"])
+    view = MinecraftPlayersView(players=data["players"], source=data["source"])
     return embed, view
+
 
 @tasks.loop(seconds=30)
 async def update_panels_task():
-    for guild_id, ip, channel_id, message_id in get_minecraft_panels():
+    panels = await get_minecraft_panels()
+
+    for guild_id, ip, port, query_port, channel_id, message_id in panels:
         guild = bot.get_guild(guild_id)
         if not guild:
             continue
@@ -1242,15 +1277,18 @@ async def update_panels_task():
 
         try:
             message = await channel.fetch_message(message_id)
-            embed, view = await create_panel(ip)
+            embed, view = await create_minecraft_panel(ip, port, query_port)
             await message.edit(embed=embed, view=view)
+
         except discord.NotFound:
-            # сообщение удалили — можно убрать из БД
             delete_minecraft_panel(message_id)
+            print(f"[PANEL REMOVE] {ip}:{port} — сообщение удалено")
+
         except discord.Forbidden:
-            pass
+            print(f"[PANEL ERROR] {ip}:{port} — нет прав")
+
         except Exception as e:
-            print(f"[PANEL ERROR] {ip}: {e}")
+            print(f"[PANEL ERROR] {ip}:{port}: {e}")
 
 
 # ------------------ customplay helpers ------------------
@@ -1621,6 +1659,47 @@ def mainbotstart():
     except Exception:
         pass
 
+
+    @bot.command(name="mcpanel")
+    async def send_minecraft_panel_prefix(ctx, ip: str, port: int = 25565, query_port: int | None = None):
+        """
+        !mcpanel <ip> [port] [query_port]
+        """
+        if not perms_manager.has_perm(ctx.author.id, perms_manager.PermRole.OWNER):
+            await ctx.send("У вас недостаточно прав.")
+            return
+
+
+        try:
+            embed, view = await create_minecraft_panel(
+                ip=ip,
+                port=port,
+                query_port=query_port
+            )
+
+            msg = await ctx.send(embed=embed, view=view)
+
+            save_minecraft_panel(
+                guild_id=ctx.guild.id,
+                server_ip=ip,
+                server_port=port,
+                query_port=query_port,
+                channel_id=ctx.channel.id,
+                message_id=msg.id
+            )
+
+            print(
+                f"[PANEL ADD] guild={ctx.guild.id} "
+                f"channel={ctx.channel.id} "
+                f"server={ip}:{port} "
+                f"query={query_port}"
+            )
+
+            if not update_panels_task.is_running():
+                update_panels_task.start()
+
+        except Exception as e:
+            await ctx.send(f"❌ Ошибка при создании панели:\n```{e}```")
     # ----------------------------
     # ПРЕФИКС-КОМАНДА (пример)
     # ----------------------------
@@ -3372,22 +3451,36 @@ def mainbotstart():
 
 
     # ----------------------------
-    # SLASH: /send_minecraft_panel [ip]
+    # SLASH: /send_minecraft_panel
     # ----------------------------
-    @tree.command(name="send_minecraft_panel", description="Создать панель сервера")
-    @app_commands.describe(ip="IP сервера Minecraft")
-    async def send_minecraft_panel(interaction: discord.Interaction, ip: str):
+    @bot.tree.command(name="send_minecraft_panel", description="Создать панель сервера")
+    async def send_minecraft_panel(
+        interaction: discord.Interaction,
+        ip: str,
+        port: int,
+        query_port: int | None = None
+    ):
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
+            await interaction.response.send_message("У вас недостаточно прав.", ephemeral=True)
+            return
+
         await interaction.response.defer()
 
-        embed, view = await create_panel(ip)
+        embed, view = await create_minecraft_panel(ip, port, query_port)
         msg = await interaction.followup.send(embed=embed, view=view)
 
-        save_panel(
+        await save_minecraft_panel(
             interaction.guild_id,
             ip,
+            port,
+            query_port,
             interaction.channel_id,
             msg.id
         )
+
+        if not update_panels_task.is_running():
+            update_panels_task.start()
+
 
     # ----------------------------
     # Время войс чата
