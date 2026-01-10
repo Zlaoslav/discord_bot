@@ -1,0 +1,7 @@
+{
+
+    "DAILY_REQUEST_LIMIT" : 50,
+    "DAILY_REQUEST_LIMIT.description" : "Максимальное число запросов к нейросети в день на 1 пользователя"
+
+
+}
