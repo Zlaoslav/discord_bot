@@ -3,7 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 from services_folder.srv_minecraft_panel import create_send_save_minecraft_panel
 
-class Minecraft(commands.Cog):
+class Minecraft_panel(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
@@ -22,11 +22,10 @@ class Minecraft(commands.Cog):
 
         await create_send_save_minecraft_panel(
             interaction=interaction,
-            db=self.db,        # 👈 передаём DB
             ip=ip,
             port=port,
             query_port=query_port
         )
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(Minecraft(bot))
+    await bot.add_cog(Minecraft_panel(bot))

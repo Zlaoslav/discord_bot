@@ -1,7 +1,7 @@
 import os
 from .connection import Database
 from .db_daily_requests import DailyRequestsRepository
-from .db_levels import LevelRewardsRepository
+from .db_levels_rewards import LevelRewardsRepository
 from .db_minecraft_panel import MinecraftPanelRepository
 import aiosqlite
 from typing import Self
