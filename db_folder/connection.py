@@ -8,14 +8,8 @@ import datetime
 import aiosqlite
 
 CONFIGS_FODLER = Path(__file__).with_name("configs_folder")
-ADVANCED_SETTINGS_PATH = CONFIGS_FODLER / "advanced_settings.json"
-
 DB_PATH = os.path.join(os.path.dirname(__file__), "bot_state.db")
 
-with open(ADVANCED_SETTINGS_PATH, "r", encoding="utf-8") as f:
-    advanced_settings = json.load(f)
-
-DAILY_REQUEST_LIMIT = advanced_settings["DAILY_REQUEST_LIMIT"]
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -130,38 +124,6 @@ class Database:
     
 
 
-def get_user_daily_count(user_id: int, date: Optional[str] = None) -> int:
-    """Возвращает количество запросов пользователя за указанную дату (по умолчанию сегодня)."""
-    date = date or datetime.date.today().isoformat()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute("SELECT count FROM user_daily_requests WHERE user_id = ? AND date = ?", (user_id, date))
-    row = cur.fetchone()
-    conn.close()
-    return int(row[0]) if row else 0
-
-def increment_user_daily_count(user_id: int) -> int:
-    """Увеличивает счётчик запросов пользователя за сегодня и возвращает новое значение."""
-    date = datetime.date.today().isoformat()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute("SELECT count FROM user_daily_requests WHERE user_id = ? AND date = ?", (user_id, date))
-    row = cur.fetchone()
-    if row:
-        new = int(row[0]) + 1
-        cur.execute("UPDATE user_daily_requests SET count = ? WHERE user_id = ? AND date = ?", (new, user_id, date))
-    else:
-        new = 1
-        cur.execute("INSERT INTO user_daily_requests (user_id, date, count) VALUES (?, ?, ?)", (user_id, date, new))
-    conn.commit()
-    conn.close()
-    return new
-
-def get_remaining_requests(user_id: int) -> int:
-    """Возвращает, сколько запросов осталось у пользователя сегодня."""
-    used = get_user_daily_count(user_id)
-    rem = DAILY_REQUEST_LIMIT - used
-    return rem if rem >= 0 else 0
 
 def set_level_reward(guild_id: int, level: int, role_id: int | None = None) -> None:
     """
