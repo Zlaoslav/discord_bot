@@ -32,7 +32,7 @@ from google import genai
 import yt_dlp
 
 from mcstatus import JavaServer
-
+import aiohttp
 # ------------------ main vars setup ------------------
 SCRIPT_DIR = Path(__file__).parent
 USERNAME = os.getenv("USERNAME") or "unknown"
@@ -391,16 +391,17 @@ def _init_db():
     """)
     # Таблица панелей майнкрафта
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS minecraft_panels_v2 (
-            guild_id INTEGER NOT NULL,
-            server_ip TEXT NOT NULL,
-            server_port INTEGER NOT NULL,
-            query_port INTEGER,
-            channel_id INTEGER NOT NULL,
-            message_id INTEGER NOT NULL,
-            PRIMARY KEY (guild_id, message_id)
-        )
-        """)
+    CREATE TABLE IF NOT EXISTS minecraft_panels_v3 (
+        guild_id INTEGER NOT NULL,
+        server_ip TEXT NOT NULL,
+        real_ip TEXT NOT NULL,
+        server_port INTEGER NOT NULL,
+        query_port INTEGER,
+        channel_id INTEGER NOT NULL,
+        message_id INTEGER NOT NULL,
+        PRIMARY KEY (guild_id, message_id)
+    )
+    """)
     conn.commit()
     conn.close()
 
@@ -1108,48 +1109,40 @@ def get_all_temp_channels_for_trigger(trigger_channel_id: int) -> list[int]:
 
 
 # ------------------ minecraft setup ------------------
-async def save_minecraft_panel(
-    guild_id: int,
-    server_ip: str,
-    server_port: int,
-    query_port: int | None,
-    channel_id: int,
-    message_id: int
-):
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute(
-        """
-        INSERT INTO minecraft_panels_v2
-        (guild_id, server_ip, server_port, query_port, channel_id, message_id)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (guild_id, server_ip, server_port, query_port, channel_id, message_id)
-    )
-    conn.commit()
-    conn.close()
-
-    print(f"[PANEL ADD] {server_ip}:{server_port} (query={query_port}) → guild {guild_id}, channel {channel_id}")
-
-
-
-async def get_minecraft_panels():
+async def add_minecraft_panel(guild_id: int, server_ip: str, real_ip: str, server_port: int, query_port: int | None,
+                              channel_id: int, message_id: int):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute("""
-        SELECT guild_id, server_ip, server_port, query_port, channel_id, message_id
-        FROM minecraft_panels_v2
-    """)
-    rows = cur.fetchall()
+        INSERT OR REPLACE INTO minecraft_panels_v3
+        (guild_id, server_ip, real_ip, server_port, query_port, channel_id, message_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (guild_id, server_ip, real_ip, server_port, query_port, channel_id, message_id))
+    conn.commit()
     conn.close()
-    return rows
+    logging.info(f"[PANEL ADD] {server_ip} (real {real_ip}:{server_port}) → guild {guild_id}, channel {channel_id}")
 
+
+# ====== 3. Функция получения записи из базы ======
+def get_panel_by_message_id(guild_id: int, message_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT real_ip, server_port
+        FROM minecraft_panels_v3
+        WHERE guild_id = ? AND message_id = ?
+    """, (guild_id, message_id))
+    row = cur.fetchone()
+    conn.close()
+    if row:
+        return {"real_ip": row[0], "server_port": row[1]}
+    return None
 
 
 def delete_minecraft_panel(message_id: int):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute("DELETE FROM minecraft_panels_v2 WHERE message_id = ?", (message_id,))
+    cur.execute("DELETE FROM minecraft_panels_v3 WHERE message_id = ?", (message_id,))
     conn.commit()
     conn.close()
 
@@ -1205,68 +1198,143 @@ async def get_server_info(ip: str, query_port: int | None = None):
         "source": source
     }
 
-class MinecraftPlayersView(discord.ui.View):
-    def __init__(self, players: list[str], source: str):
-        super().__init__(timeout=120)
-        self.players = players
-        self.source = source
+class ShowPlayersButton(discord.ui.View):
+    def __init__(self, guild_id: int, message_id: int):
+        super().__init__(timeout=None)
+        self.guild_id = guild_id
+        self.message_id = message_id
 
     @discord.ui.button(label="👥 Показать игроков", style=discord.ButtonStyle.primary)
     async def show_players(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not self.players:
-            await interaction.response.send_message(
-                "❌ Список игроков пуст или скрыт сервером",
-                ephemeral=True
-            )
+        # Берем real_ip и query_port из базы
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT real_ip, query_port
+            FROM minecraft_panels_v3
+            WHERE guild_id = ? AND message_id = ?
+        """, (self.guild_id, self.message_id))
+        row = cur.fetchone()
+        conn.close()
+
+        if not row:
+            await interaction.response.send_message("❌ Панель не найдена в базе.", ephemeral=True)
             return
 
-        header = (
-            f"👥 **Игроки онлайн:** {len(self.players)}\n"
-            f"📡 **Источник:** `{self.source}`\n\n"
-        )
+        real_ip, query_port = row
 
-        chunks = []
-        current = header
+        if not query_port:
+            await interaction.response.send_message("❌ Query порт не указан для этой панели.", ephemeral=True)
+            return
 
-        for name in self.players:
-            line = f"• {name}\n"
-            if len(current) + len(line) > 1900:
-                chunks.append(current)
-                current = ""
-            current += line
+        url = f"http://{real_ip}:{query_port}/info"
 
-        if current:
-            chunks.append(current)
+        await interaction.response.defer(ephemeral=True)
+        temp_msg = await interaction.followup.send("⏳ Получаем информацию о игроках...", ephemeral=True)
 
-        await interaction.response.send_message(chunks[0], ephemeral=True)
-        for chunk in chunks[1:]:
-            await interaction.followup.send(chunk, ephemeral=True)
+        players = []
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=10) as resp:
+                    text = await resp.text()
+
+                    # Попытка исправить некорректные имена игроков в массиве players
+                    def fix_players_json(text: str) -> str:
+                        pattern = r'("players"\s*:\s*)\[(.*?)\]'
+                        match = re.search(pattern, text, re.DOTALL)
+                        if match:
+                            prefix = match.group(1)
+                            content = match.group(2).strip()
+                            if content:
+                                # Разделяем по запятым и добавляем кавычки
+                                names = [f'"{name.strip()}"' for name in content.split(",")]
+                                fixed = prefix + "[" + ",".join(names) + "]"
+                                text = re.sub(pattern, fixed, text, flags=re.DOTALL)
+                            else:
+                                # пустой массив
+                                fixed = prefix + "[]"
+                                text = re.sub(pattern, fixed, text, flags=re.DOTALL)
+                        return text
+
+                    fixed_text = fix_players_json(text)
+
+                    try:
+                        data = json.loads(fixed_text)
+                        players = data.get("players", [])
+                    except Exception as e_json:
+                        logging.warning(f"[HTTP ERROR] Некорректный JSON после исправления с {url}: {e_json}\nТекст ответа: {fixed_text}")
+                        await temp_msg.edit(content="❌ Сервер вернул некорректные данные даже после исправления JSON.")
+                        return
+
+        except Exception as e:
+            logging.warning(f"[HTTP ERROR] {url} → {e}")
+            await temp_msg.edit(content="❌ Не удалось получить информацию с сервера (таймаут или оффлайн).")
+            return
+
+        if not players:
+            text = "❌ Игроки не онлайн или список пуст."
+        else:
+            text = "👥 Игроки онлайн:\n" + "\n".join(f"• {p}" for p in players)
+
+        await temp_msg.edit(content=text)
 
 
+async def create_minecraft_panel(ip: str, real_ip: str | None = None, port: int = 25565, query_port: int | None = None):
+    """
+    Создает embed для панели сервера Minecraft.
+    real_ip используется для HTTP-запросов /info.
+    """
+    from mcstatus import JavaServer  # импорт здесь, если не импортирован глобально
 
-async def create_minecraft_panel(ip: str, port: int = 25565, query_port: int | None = None):
-    data = await get_server_info(ip, query_port=query_port)
+    # Пытаемся получить статус сервера через ping
+    online = False
+    players_online = 0
+    players_max = 0
+    try:
+        server = JavaServer.lookup(ip)
+        status = server.status()
+        online = True
+        players_online = status.players.online
+        players_max = status.players.max
+    except Exception as e:
+        logging.warning(f"[STATUS ERROR] {ip}:{port} → {e}")
 
     embed = discord.Embed(
-        title=f"{'🟩' if data['online'] else '🟥'} {ip}:{port}",
-        color=discord.Color.green() if data["online"] else discord.Color.red()
+        title=f"{'🟩' if online else '🟥'} {ip}:{port}",
+        color=discord.Color.green() if online else discord.Color.red()
     )
-
     embed.add_field(
         name="Игроки",
-        value=f"{data['players_online']}/{data['players_max']}",
+        value=f"{players_online}/{players_max}",
         inline=True
     )
 
-    view = MinecraftPlayersView(players=data["players"], source=data["source"])
+    # Создаем кнопку для показа игроков через GET /info
+    view = ShowPlayersButton(
+        guild_id=None,  # временно None, нужно подставлять при отправке
+        message_id=None
+    )
+
     return embed, view
 
 
+# ====== update_panels_task ======
 @tasks.loop(seconds=30)
 async def update_panels_task():
-    panels = await get_minecraft_panels()
+    """
+    Обновляет все панели в Discord каждые 30 секунд.
+    Использует новую базу minecraft_panels_v3 с real_ip.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT guild_id, server_ip, real_ip, server_port, query_port, channel_id, message_id
+        FROM minecraft_panels_v3
+    """)
+    panels = cur.fetchall()
+    conn.close()
 
-    for guild_id, ip, port, query_port, channel_id, message_id in panels:
+    for guild_id, server_ip, real_ip, port, query_port, channel_id, message_id in panels:
         guild = bot.get_guild(guild_id)
         if not guild:
             continue
@@ -1277,18 +1345,28 @@ async def update_panels_task():
 
         try:
             message = await channel.fetch_message(message_id)
-            embed, view = await create_minecraft_panel(ip, port, query_port)
+            embed, view = await create_minecraft_panel(server_ip, real_ip, port, query_port)
+
+            # Обновляем guild_id и message_id в кнопке
+            for child in view.children:
+                if isinstance(child, discord.ui.Button):
+                    view.guild_id = guild_id
+                    view.message_id = message_id
+
             await message.edit(embed=embed, view=view)
 
         except discord.NotFound:
             delete_minecraft_panel(message_id)
-            print(f"[PANEL REMOVE] {ip}:{port} — сообщение удалено")
+            logging.info(f"[PANEL REMOVE] {server_ip}:{port} — сообщение удалено")
 
         except discord.Forbidden:
-            print(f"[PANEL ERROR] {ip}:{port} — нет прав")
+            logging.warning(f"[PANEL ERROR] {server_ip}:{port} — нет прав")
 
         except Exception as e:
-            print(f"[PANEL ERROR] {ip}:{port}: {e}")
+            logging.error(f"[PANEL ERROR] {server_ip}:{port} → {e}")
+
+
+
 
 
 # ------------------ customplay helpers ------------------
@@ -1660,46 +1738,6 @@ def mainbotstart():
         pass
 
 
-    @bot.command(name="mcpanel")
-    async def send_minecraft_panel_prefix(ctx, ip: str, port: int = 25565, query_port: int | None = None):
-        """
-        !mcpanel <ip> [port] [query_port]
-        """
-        if not perms_manager.has_perm(ctx.author.id, perms_manager.PermRole.OWNER):
-            await ctx.send("У вас недостаточно прав.")
-            return
-
-
-        try:
-            embed, view = await create_minecraft_panel(
-                ip=ip,
-                port=port,
-                query_port=query_port
-            )
-
-            msg = await ctx.send(embed=embed, view=view)
-
-            save_minecraft_panel(
-                guild_id=ctx.guild.id,
-                server_ip=ip,
-                server_port=port,
-                query_port=query_port,
-                channel_id=ctx.channel.id,
-                message_id=msg.id
-            )
-
-            print(
-                f"[PANEL ADD] guild={ctx.guild.id} "
-                f"channel={ctx.channel.id} "
-                f"server={ip}:{port} "
-                f"query={query_port}"
-            )
-
-            if not update_panels_task.is_running():
-                update_panels_task.start()
-
-        except Exception as e:
-            await ctx.send(f"❌ Ошибка при создании панели:\n```{e}```")
     # ----------------------------
     # ПРЕФИКС-КОМАНДА (пример)
     # ----------------------------
@@ -3457,29 +3495,48 @@ def mainbotstart():
     async def send_minecraft_panel(
         interaction: discord.Interaction,
         ip: str,
-        port: int,
+        real_ip: str | None = None,
+        port: int = 25565,
         query_port: int | None = None
     ):
+        # Проверка прав
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
-            await interaction.response.send_message("У вас недостаточно прав.", ephemeral=True)
+            await interaction.response.send_message("❌ У вас недостаточно прав.", ephemeral=True)
             return
 
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)  # отвечаем только пользователю
 
-        embed, view = await create_minecraft_panel(ip, port, query_port)
-        msg = await interaction.followup.send(embed=embed, view=view)
+        if real_ip is None:
+            real_ip = ip  # если реальный IP не указан, берем ip сервера
 
-        await save_minecraft_panel(
-            interaction.guild_id,
-            ip,
-            port,
-            query_port,
-            interaction.channel_id,
-            msg.id
+        embed, view = await create_minecraft_panel(ip, real_ip, port, query_port)
+
+        # Отправляем панель **в канал**, но не как ответ на команду
+        channel = interaction.channel
+        msg = await channel.send(embed=embed, view=view)
+
+        # Проставляем guild_id и message_id для кнопки
+        view.guild_id = interaction.guild_id
+        view.message_id = msg.id
+
+        # Сохраняем в базу (новая структура)
+        await add_minecraft_panel(
+            guild_id=interaction.guild_id,
+            server_ip=ip,
+            real_ip=real_ip,
+            server_port=port,
+            query_port=query_port,
+            channel_id=channel.id,
+            message_id=msg.id
         )
 
+        # Если таск обновления не запущен — запускаем
         if not update_panels_task.is_running():
             update_panels_task.start()
+
+        # Отправляем пользователю ephemeral-сообщение о успехе
+        await interaction.followup.send("✅ Панель успешно отправлена!", ephemeral=True)
+
 
 
     # ----------------------------
