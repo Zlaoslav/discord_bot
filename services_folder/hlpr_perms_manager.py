@@ -33,7 +33,7 @@ __all__ = [
     "INDEPENDENT_ROLES"
 ]
 # Путь к файлу с правами
-PERMS_FILE = Path(__file__).parent / "perms_data.json"
+PERMS_FILE = Path(__file__).parent.parent / "configs_folder" / "perms_data.json"
 
 
 class PermRole(Enum):

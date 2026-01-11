@@ -2,8 +2,8 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from services_folder.srv_daily_requests import get_remaining_requests, increment_user_daily_count, ask_gemini, DAILY_REQUEST_LIMIT
-import configs_folder.perms_manager as perms_manager
-from services_folder.srv_logging import logger
+import services_folder.hlpr_perms_manager as hlpr_perms_manager
+from services_folder.hlpr_logging import logger
 class Askgpt(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -24,7 +24,7 @@ class Askgpt(commands.Cog):
             return
 
         # OWNER и HOST игнорируют лимит
-        is_privileged = perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER) or perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.HOST)
+        is_privileged = hlpr_perms_manager.has_perm(interaction.user.id, hlpr_perms_manager.PermRole.OWNER) or hlpr_perms_manager.has_perm(interaction.user.id, hlpr_perms_manager.PermRole.HOST)
 
         if not is_privileged:
             remaining = get_remaining_requests(interaction.user.id)

@@ -11,6 +11,19 @@ CONFIGS_FODLER = Path(__file__).with_name("configs_folder")
 DB_PATH = os.path.join(os.path.dirname(__file__), "bot_state.db")
 
 
+class Database:
+    def __init__(self, path: str):
+        self.path = path
+        self.db: aiosqlite.Connection | None = None
+
+    async def connect(self):
+        self.db = await aiosqlite.connect(self.path)
+        await self.db.execute("PRAGMA foreign_keys = ON;")
+
+    async def close(self):
+        await self.db.close()
+
+        
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -103,74 +116,4 @@ def init_db():
         )
         """)
     conn.commit()
-    conn.close()
-
-
-
-class Database:
-    def __init__(self, path: str):
-        self.path = path
-        self.db: aiosqlite.Connection | None = None
-
-    async def connect(self):
-        self.db = await aiosqlite.connect(self.path)
-        await self.db.execute("PRAGMA foreign_keys = ON;")
-
-    async def close(self):
-        await self.db.close()
-
-
-
-    
-
-
-
-def set_level_reward(guild_id: int, level: int, role_id: int | None = None) -> None:
-    """
-    Устанавливает или удаляет награду за уровень.
-
-    - role_id > 0  → назначить / переназначить награду
-    - role_id == 0 или None → удалить награду за уровень
-    """
-
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-
-    # удаление награды
-    if not role_id:
-        cur.execute(
-            "DELETE FROM level_rewards WHERE guild_id = ? AND level = ?;",
-            (guild_id, level)
-        )
-    else:
-        # назначение / переназначение награды
-        cur.execute(
-            """
-            INSERT INTO level_rewards (guild_id, level, role)
-            VALUES (?, ?, ?)
-            ON CONFLICT(guild_id, level)
-            DO UPDATE SET role = excluded.role;
-            """,
-            (guild_id, level, role_id)
-        )
-
-    conn.commit()
-    conn.close()
-
-
-def get_level_rewards(guild_id: int) -> list[tuple[int, int]]:
-    """
-    Возвращает список наград уровней:
-    [(level, role_id), ...]
-    """
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-
-    cur.execute(
-        "SELECT level, role FROM level_rewards WHERE guild_id = ?;",
-        (guild_id,)
-    )
-
-    rows = cur.fetchall()
-    conn.close()
-    return rows
+    conn.close()    

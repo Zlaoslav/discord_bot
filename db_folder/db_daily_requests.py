@@ -1,10 +1,11 @@
+import aiosqlite
 import datetime
 
 
 class DailyRequestsRepository:
     __TABLE = "user_daily_requests"
 
-    def __init__(self, db):
+    def __init__(self, db: aiosqlite.Connection):
         self.db = db
 
     async def get_count(

@@ -1,6 +1,6 @@
 from discord import Interaction as Type_Interaction
-from services_folder.srv_logging import logger
-import configs_folder.perms_manager as perms_manager
+from services_folder.hlpr_logging import logger
+import services_folder.hlpr_perms_manager as hlpr_perms_manager
 from configs_folder.advanced_settings import MAX_LEVEL
 from db_folder import DB
 
@@ -10,7 +10,7 @@ level : int
 ) -> str:
     if interaction.guild is None:
         return "Команда доступна только на сервере."
-    if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
+    if not hlpr_perms_manager.has_perm(interaction.user.id, hlpr_perms_manager.PermRole.OWNER):
         return "У вас недостаточно прав для этой команды." 
     if level <= 0 or level > MAX_LEVEL:
         return f"Уровень должен быть больше нуля и меньше {MAX_LEVEL}!"

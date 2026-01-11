@@ -1,19 +1,22 @@
 import os
-from .connection import Database
-from .db_daily_requests import DailyRequestsRepository
-from .db_levels_rewards import LevelRewardsRepository
-from .db_minecraft_panel import MinecraftPanelRepository
 import aiosqlite
 from typing import Self
+
+from .connection import Database, init_db
+from .db_daily_requests import DailyRequestsRepository
+from .db_level_rewards import LevelRewardsRepository
+from .db_level_users import LevelUsersRepository
+from .db_level_alerts import LevelAlertsRepository
+from .db_minecraft_panel import MinecraftPanelRepository
+
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "bot_state.db")
-
-from typing import Self
-import aiosqlite
 
 class DB:
     daily_requests: DailyRequestsRepository
     level_rewards: LevelRewardsRepository
+    level_users : LevelUsersRepository
+    level_alerts : LevelAlertsRepository
     minecraft_panel: MinecraftPanelRepository
 
     def __init__(self, path: str):
@@ -23,7 +26,14 @@ class DB:
         db: aiosqlite.Connection = self.database.db
         self.daily_requests = DailyRequestsRepository(db)
         self.level_rewards = LevelRewardsRepository(db)
+        self.level_users = LevelUsersRepository(db)
+        self.level_alerts = LevelAlertsRepository(db)
         self.minecraft_panel = MinecraftPanelRepository(db)
+
+    def init_db(self):
+        init_db()
+
+        
 
     async def connect(self) -> None:
         await self.database.connect()
