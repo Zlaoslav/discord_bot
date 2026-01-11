@@ -8,6 +8,7 @@ from .db_level_rewards import LevelRewardsRepository
 from .db_level_users import LevelUsersRepository
 from .db_level_alerts import LevelAlertsRepository
 from .db_minecraft_panel import MinecraftPanelRepository
+from .db_tempvoice import TempvoiceRepository
 
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "bot_state.db")
@@ -18,6 +19,7 @@ class DB:
     level_users : LevelUsersRepository
     level_alerts : LevelAlertsRepository
     minecraft_panel: MinecraftPanelRepository
+    tempvoice: TempvoiceRepository
 
     def __init__(self, path: str):
         self.database = Database(path)
@@ -29,6 +31,7 @@ class DB:
         self.level_users = LevelUsersRepository(db)
         self.level_alerts = LevelAlertsRepository(db)
         self.minecraft_panel = MinecraftPanelRepository(db)
+        self.tempvoice = TempvoiceRepository(db)
 
     def init_db(self):
         init_db()
