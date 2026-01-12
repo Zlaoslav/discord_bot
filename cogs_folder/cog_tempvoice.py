@@ -5,16 +5,17 @@ import services_folder.hlpr_perms_manager as perms_manager
 from services_folder.hlpr_logging import logger
 from services_folder.srv_tempvoice import get_temp_channel_for_user, get_user_settings, add_temp_mapping, remove_temp_mapping_by_voice, remove_temp_mapping_by_user, _serialize_overwrites, _deserialize_overwrites
 from db_folder import DB
-
+import time
 class tempvoice(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.voice_join_time = {}  # key = (guild_id, user_id), value = timestamp
         
     @app_commands.command(
         name="send_tempvoicepanel",
         description="Отправить панель TempVoice (owner only)"
     )
-    async def send_tempvoicepanel(interaction: discord.Interaction, trigger: discord.VoiceChannel | None, channel: discord.TextChannel | None = None):
+    async def send_tempvoicepanel(self, interaction: discord.Interaction, trigger: discord.VoiceChannel | None, channel: discord.TextChannel | None = None):
         if interaction.guild is None:
             await interaction.response.send_message("Только на сервере.", ephemeral=True)
             return
@@ -50,9 +51,40 @@ class tempvoice(commands.Cog):
         sent = await target.send("🎛️ Панель TempVoice — нажмите кнопки для управления вашим временным каналом.", view=view)
         DB.tempvoice.set_panel_message_id(int(trig_key), int(sent.id))
         await interaction.response.send_message("✅ Панель TempVoice отправлена.", ephemeral=True)
- 
+    
+    
     @commands.Cog.listener()
-    async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        await self.on_tempvoice(member, before, after)
+        await self.on_voice_join_time(member, before, after)
+    
+    async def on_voice_join_time(self, member, before, after):
+        if member.bot:
+            return
+        
+        key = (member.guild.id, member.id)
+        now = time.time()
+
+        # Пользователь вошёл в голосовой канал
+        if before.channel is None and after.channel is not None:
+            self.voice_join_time[key] = now
+
+        # Пользователь вышел из голосового канала
+        elif before.channel is not None and after.channel is None:
+            join_time = self.voice_join_time.pop(key, None)
+            if join_time:
+                duration = int(now - join_time)
+                DB.level_users.add_voice_time(member.guild.id, member.id, duration)
+
+        # Пользователь переключился между каналами
+        elif before.channel != after.channel:
+            join_time = self.voice_join_time.get(key)
+            if join_time:
+                duration = int(now - join_time)
+                DB.level_users.add_voice_time(member.guild.id, member.id, duration)
+                self.voice_join_time[key] = now
+    
+    async def on_tempvoice(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         # Игнорировать ботов (включая самого бота)
         if member.bot:
             return
