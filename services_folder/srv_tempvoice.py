@@ -130,5 +130,3 @@ def get_all_temp_channels_for_trigger(trigger_channel_id: int) -> list[int]:
     m = rec.get("current_map") or {}
     return [v.get("voice") for v in m.values() if v.get("voice")]
 
-def get_tempvoice_by_trigger(trg):
-    return DB.tempvoice.get_tempvoice_by_trigger(trg)
