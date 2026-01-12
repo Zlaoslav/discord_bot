@@ -1,6 +1,6 @@
 import aiosqlite
 class MinecraftPanelRepository:
-    __TABLE = "minecraft_panels_v2"
+    __TABLE = "minecraft_panels_v3"
 
     def __init__(self, db: aiosqlite.Connection):
         self.db = db
@@ -61,3 +61,25 @@ class MinecraftPanelRepository:
         )
         await self.db.commit()
         print(f"[PANEL DELETE] {server_ip}:{server_port} → guild {guild_id}")
+    
+    async def get_minecraft_panels(self):
+        cursor = await self.db.execute(
+            f"""
+                SELECT guild_id, server_ip, real_ip, server_port, query_port, channel_id, message_id
+                FROM {self.__TABLE}
+            """
+        )
+        panels = cursor.fetchall()
+        return panels
+
+    async def get_real_ip_and_query_port(self, guild_id, message_id):
+        cursor = await self.db.execute(
+            f"""
+                SELECT real_ip, query_port
+                FROM {self.__TABLE}
+                WHERE guild_id = ? AND message_id = ?
+            """, 
+            (guild_id, message_id)
+        )
+        row = cursor.fetchone()
+        return row
