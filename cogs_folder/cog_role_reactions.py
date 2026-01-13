@@ -10,6 +10,56 @@ class role_reactions(commands.Cog):
         self.bot = bot
 
 
+    @app_commands.command(name="role_reaction", description="Создать сообщение с реакцией для выдачи роли")
+    @discord.app_commands.describe(
+        emoji="Эмодзи для реакции",
+        role="Роль для выдачи при реакции"
+    )
+    async def role_reaction(
+        self,
+        interaction: discord.Interaction,
+        emoji: str, role: discord.Role
+        ):
+        """Создаёт сообщение в канале с реакцией, которая выдаёт роль."""
+
+        # Проверяем права
+        if not interaction.user.guild_permissions.manage_roles or perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.HOST):
+            await interaction.response.send_message("❌ У вас нет прав на управление ролями.", ephemeral=True)
+            return
+
+        bot_member = interaction.guild.get_member(self.bot.user.id)
+        if not bot_member or not bot_member.guild_permissions.manage_roles:
+            await interaction.response.send_message("❌ У бота нет прав на управление ролями.", ephemeral=True)
+            return
+
+        if role.position >= bot_member.top_role.position:
+            await interaction.response.send_message("❌ Не могу управлять этой ролью. Роль выше или равна роли бота.", ephemeral=True)
+            return
+
+        # Отправляем сообщение в канал
+        channel = interaction.channel
+        message = await channel.send(f"Нажмите {emoji} чтобы получить роль {role.mention}")
+
+        # Добавляем реакцию
+        try:
+            await message.add_reaction(emoji)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Не удалось добавить реакцию: {e}", ephemeral=True)
+            await message.delete()
+            return
+
+        # Сохраняем в БД
+        try:
+            DB.role_reactions.save_role_reaction(message.id, channel.id, emoji, role.id)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка при сохранении в БД: {e}", ephemeral=True)
+            await message.delete()
+            return
+
+        await interaction.response.send_message(
+            f"✅ Сообщение создано! Реакция: {emoji}, Роль: {role.mention}",
+            ephemeral=True
+        )
 
 
 

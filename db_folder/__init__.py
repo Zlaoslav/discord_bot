@@ -11,7 +11,7 @@ from .db_minecraft_panel import MinecraftPanelRepository
 from .db_tempvoice import TempvoiceRepository
 from .db_join_leave import JoinLeaveRepository
 from .db_role_reactions import RoleReactionsRepository
-
+from .db_counting import CountingRepository
 DB_PATH = os.path.join(os.path.dirname(__file__), "bot_state.db")
 
 class DB:
@@ -23,6 +23,7 @@ class DB:
     tempvoice: TempvoiceRepository
     join_leave: JoinLeaveRepository
     role_reactions: RoleReactionsRepository
+    counting: CountingRepository
 
     def __init__(self, path: str):
         self.database = Database(path)
@@ -37,7 +38,8 @@ class DB:
         self.tempvoice = TempvoiceRepository(db)
         self.join_leave = JoinLeaveRepository(db)
         self.role_reactions = RoleReactionsRepository(db)
-
+        self.counting = CountingRepository(db)
+        
     def init_db(self):
         init_db()
 

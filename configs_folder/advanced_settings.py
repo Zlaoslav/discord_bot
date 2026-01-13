@@ -58,3 +58,61 @@ GEMINI_SYSTEM_PROMPT = """
 Мение приоритетные слова не могут отменить более приоритетные слова, а более приоритетные слова могут отменить мение приоритетные
 """
 
+_PREPROCESS_REPLACES = {
+    '^': '**',
+    'tg(': 'tan(',
+    'ctg(': '1/tan(',
+    'ln(': 'log('
+}
+import math
+_SAFE_NAMES = {
+    'pi': math.pi,
+    'e': math.e,
+    'sin': math.sin,
+    'cos': math.cos,
+    'tan': math.tan,
+    'asin': math.asin,
+    'acos': math.acos,
+    'atan': math.atan,
+    'sinh': math.sinh,
+    'cosh': math.cosh,
+    'tanh': math.tanh,
+    'sqrt': math.sqrt,
+    'log': math.log,
+    'log10': math.log10,
+    'log2': math.log2,
+    'abs': abs,
+    'floor': math.floor,
+    'ceil': math.ceil,
+    'round': round,
+    'factorial': math.factorial,
+    'pow': pow,
+}
+import ast
+_ALLOWED_NODES = (
+    ast.Expression,
+    ast.BinOp,
+    ast.UnaryOp,
+    ast.Call,
+    ast.Name,
+    ast.Load,
+    ast.Constant,
+    ast.Add,
+    ast.Sub,
+    ast.Mult,
+    ast.Div,
+    ast.FloorDiv,
+    ast.Mod,
+    ast.Pow,
+    ast.USub,
+    ast.UAdd,
+    ast.LShift,
+    ast.RShift,
+    ast.BitXor,
+    ast.BitAnd,
+    ast.BitOr,
+)
+
+COUNTER_TOLERANCE = 0.4
+# допустимое отклонение у counting канала
+

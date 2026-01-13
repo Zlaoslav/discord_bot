@@ -115,5 +115,14 @@ def init_db():
             PRIMARY KEY (guild_id, message_id)
         )
         """)
+    # Таблица коунтинг канала
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS counting (
+            guild_id INTEGER PRIMARY KEY,
+            channel_id INTEGER,
+            next_expected INTEGER NOT NULL
+        );
+    """)
+
     conn.commit()
     conn.close()    
