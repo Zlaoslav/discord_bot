@@ -9,17 +9,20 @@ from .db_level_users import LevelUsersRepository
 from .db_level_alerts import LevelAlertsRepository
 from .db_minecraft_panel import MinecraftPanelRepository
 from .db_tempvoice import TempvoiceRepository
-
+from .db_join_leave import JoinLeaveRepository
+from .db_role_reactions import RoleReactionsRepository
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "bot_state.db")
 
 class DB:
     daily_requests: DailyRequestsRepository
     level_rewards: LevelRewardsRepository
-    level_users : LevelUsersRepository
-    level_alerts : LevelAlertsRepository
+    level_users: LevelUsersRepository
+    level_alerts: LevelAlertsRepository
     minecraft_panel: MinecraftPanelRepository
     tempvoice: TempvoiceRepository
+    join_leave: JoinLeaveRepository
+    role_reactions: RoleReactionsRepository
 
     def __init__(self, path: str):
         self.database = Database(path)
@@ -32,6 +35,8 @@ class DB:
         self.level_alerts = LevelAlertsRepository(db)
         self.minecraft_panel = MinecraftPanelRepository(db)
         self.tempvoice = TempvoiceRepository(db)
+        self.join_leave = JoinLeaveRepository(db)
+        self.role_reactions = RoleReactionsRepository(db)
 
     def init_db(self):
         init_db()

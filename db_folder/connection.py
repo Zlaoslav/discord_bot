@@ -38,13 +38,13 @@ def init_db():
 
     # Таблица для join_leave
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS join_leave (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            channel_id INTEGER
+        CREATE TABLE IF NOT EXISTS join_leave_v2 (
+            guild_id INTEGER PRIMARY KEY,
+            channel_id INTEGER,
+            mention_role_id INTEGER
         );
     """)
-    # гарантируем одну строку с id=1
-    cur.execute("INSERT OR IGNORE INTO join_leave (id, channel_id) VALUES (1, NULL);")
+
 
     # Таблица для role_reaction (реакции с автоматической выдачей ролей)
     cur.execute("""

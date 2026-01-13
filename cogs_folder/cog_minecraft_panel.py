@@ -26,7 +26,11 @@ class Minecraft_panel(commands.Cog):
             port=port,
             query_port=query_port
         )
-
+        
+    @commands.Cog.listener()
+    def on_ready(self):
+        if not self.update_panels_task.is_running():
+            self.update_panels_task.start()
 
     @tasks.loop(seconds=30)
     async def update_panels_task(self):

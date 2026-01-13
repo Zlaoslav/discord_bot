@@ -10,7 +10,66 @@ class tempvoice(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.voice_join_time = {}  # key = (guild_id, user_id), value = timestamp
-        
+
+
+    @app_commands.command(
+        name="set_tempvoice",
+        description="Установить voice-канал как триггер для TempVoice (owner only)"
+        )
+    async def set_tempvoice(
+        self,
+        interaction: discord.Interaction,
+        channel: discord.VoiceChannel
+        ):
+
+        if interaction.guild is None:
+            await interaction.response.send_message("Команда только на сервере.", ephemeral=True)
+            return
+
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
+            await interaction.response.send_message("У вас недостаточно прав для этой команды.", ephemeral=True)
+            return
+
+        try:
+            if channel is None:
+                DB.tempvoice.save_tempvoice_trigger(int(interaction.guild.id), 0)
+                await interaction.response.send_message(f"Триггер TempVoice установлен глобально (любое вхождение).", ephemeral=True)
+            else:
+                DB.tempvoice.save_tempvoice_trigger(int(interaction.guild.id), int(channel.id))
+                await interaction.response.send_message(f"Триггер TempVoice установлен: {channel.mention}", ephemeral=True)
+        except Exception as e:
+            logger.exception(f"Ошибка при установке tempvoice триггера: {e}")
+            await interaction.response.send_message("Ошибка при сохранении триггера (см лог).", ephemeral=True)
+
+    @app_commands.command(
+        name="unset_tempvoicechannel",
+        description="Удалить TempVoice триггер (owner only)"
+        )
+    
+    async def unset_tempvoicechannel(
+        self,
+        interaction: discord.Interaction,
+        channel: discord.VoiceChannel | None = None
+        ):
+
+        if interaction.guild is None:
+            await interaction.response.send_message("Команда только на сервере.", ephemeral=True)
+            return
+
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
+            await interaction.response.send_message("У вас недостаточно прав для этой команды.", ephemeral=True)
+            return
+
+        try:
+            trig_id = int(channel.id) if channel is not None else 0
+            # remove DB record
+            DB.tempvoice.remove_tempvoice_trigger(trig_id)
+            await interaction.response.send_message(f"Триггер TempVoice удалён (id={trig_id}).", ephemeral=True)
+        except Exception as e:
+            logger.exception(f"Ошибка при удалении tempvoice триггера: {e}")
+            await interaction.response.send_message("Ошибка при удалении триггера (см. лог).", ephemeral=True)
+
+
     @app_commands.command(
         name="send_tempvoicepanel",
         description="Отправить панель TempVoice (owner only)"
@@ -632,6 +691,22 @@ class PermsOptionsView(discord.ui.View):
         view.add_item(RolesSelect(self.trigger_channel_id, field, add))
         await interaction.response.send_message(f"Выберите роли для `{field}`:", view=view, ephemeral=True)
 
+    @commands.Cog.listener()
+    def on_ready(self):
+        try:
+            # Регистрируем для всех записей из БД, используя guild_id и panel_message_id
+            recs = DB.tempvoice.get_all_tempvoices()
+            for rec in (recs or []):
+                panel_id = rec.get('panel_message_id')
+                trig = rec.get('trigger_channel_id') or 0
+                if panel_id:
+                    try:
+                        self.bot.add_view(TempVoicePanelView(int(trig)), message_id=int(panel_id))
+                        logger.debug(f"Registered TempVoice view for message {panel_id} (trigger={trig}, guild={rec.get('guild_id')})")
+                    except Exception as e:
+                        logger.warning(f"Не удалось зарегистрировать TempVoice view для message {panel_id}: {e}")
+        except Exception as e:
+            logger.warning(f"Ошибка при регистрации TempVoice views: {e}")
 
 
 async def setup(bot: commands.Bot):
