@@ -12,6 +12,8 @@ from .db_tempvoice import TempvoiceRepository
 from .db_join_leave import JoinLeaveRepository
 from .db_role_reactions import RoleReactionsRepository
 from .db_counting import CountingRepository
+from .db_restart_state import RestartStateRepository
+
 DB_PATH = os.path.join(os.path.dirname(__file__), "bot_state.db")
 
 class DB:
@@ -24,6 +26,7 @@ class DB:
     join_leave: JoinLeaveRepository
     role_reactions: RoleReactionsRepository
     counting: CountingRepository
+    restart_state: RestartStateRepository
 
     def __init__(self, path: str):
         self.database = Database(path)
@@ -39,6 +42,7 @@ class DB:
         self.join_leave = JoinLeaveRepository(db)
         self.role_reactions = RoleReactionsRepository(db)
         self.counting = CountingRepository(db)
+        self.restart_state = RestartStateRepository(db)
         
     def init_db(self):
         init_db()

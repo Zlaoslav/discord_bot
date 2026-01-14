@@ -116,3 +116,4 @@ _ALLOWED_NODES = (
 COUNTER_TOLERANCE = 0.4
 # допустимое отклонение у counting канала
 
+OWNER_ID = 727105264486187090

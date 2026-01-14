@@ -15,6 +15,60 @@ class level_alerts(commands.Cog):
         self.bot = bot
 
     @app_commands.command(
+        name="calculate",
+        description="Вычислить математическое выражение."
+        )
+    async def calculate(
+        self,
+        interaction: discord.Interaction,
+        expression: str
+        ):
+        await interaction.response.defer(ephemeral=False)
+
+        expr = expression.strip()
+        if not expr:
+            await interaction.followup.send("Пустое выражение.", ephemeral=True)
+            return
+
+        expr = _preprocess(expr)
+
+        try:
+            node = ast.parse(expr, mode='eval')
+        except Exception as e:
+            await interaction.followup.send(f"Синтаксическая ошибка: {e}", ephemeral=True)
+            return
+
+        try:
+            _check_nodes(node)
+        except Exception as e:
+            await interaction.followup.send(f"Недопустимый элемент в выражении: {e}", ephemeral=True)
+            return
+
+        used = set()
+        _find_names(node, used)
+        unknown = [name for name in used if name not in _SAFE_NAMES]
+        if unknown:
+            await interaction.followup.send(f"Неизвестные идентификаторы: {', '.join(sorted(unknown))}", ephemeral=True)
+            return
+
+        try:
+            result = _eval_node(node)
+        except NameError as ne:
+            await interaction.followup.send(f"Неизвестная функция или константа: {ne}", ephemeral=True)
+            return
+        except Exception as e:
+            await interaction.followup.send(f"Ошибка при вычислении: {e}", ephemeral=True)
+            return
+
+        if isinstance(result, float):
+            out = f"{result:.12g}"
+        else:
+            out = str(result)
+
+        await interaction.followup.send(f"`{expression}` = **{out}**", ephemeral=False)
+
+
+    @app_commands.command(
         name="set_counter",
         description="Установить канал для счётчика (owner only)."
     )
