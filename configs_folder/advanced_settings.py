@@ -115,5 +115,21 @@ _ALLOWED_NODES = (
 
 COUNTER_TOLERANCE = 0.4
 # допустимое отклонение у counting канала
+import os
+USERNAME = os.getenv("USERNAME") or "unknown"
+import socket
+HOSTNAME = socket.gethostname()
+import time
+START_TIME = time.time()
 
 OWNER_ID = 727105264486187090
+CODEVERSION = "1.8.4"
+from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent.parent
+SOUNDS_DIR = BASE_DIR / "sounds"
+ALLOWED_EXT = (".mp3", ".wav", ".ogg", ".m4a")
+FFMPEG_PATH = str(BASE_DIR / "ffmpeg") 
+FFMPEG_OPTIONS = {
+    "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
+    "options": "-vn",
+}
