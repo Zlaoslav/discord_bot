@@ -133,3 +133,26 @@ FFMPEG_OPTIONS = {
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
     "options": "-vn",
 }
+
+YTDL_OPTS = {
+    "format": "bestaudio/best",
+    "noplaylist": True,
+    "quiet": True,
+    "no_warnings": True,
+    "default_search": "ytsearch",
+
+    # КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ
+    "extractor_args": {
+        "youtube": {
+            "player_client": ["android"],
+            "skip": ["webpage"]
+        }
+    },
+
+    # повышает стабильность
+    "force_ipv4": True,
+    "nocheckcertificate": True,
+}
+
+
+
