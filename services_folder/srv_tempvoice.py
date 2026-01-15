@@ -1,37 +1,36 @@
 import discord
-from db_folder import DB
 from typing import Optional
 
-def add_temp_mapping(trigger_channel_id: int, user_id: int, voice_channel_id: int, text_channel_id: Optional[int] = None) -> None:
-    rec = DB.tempvoice.get_tempvoice_by_trigger(trigger_channel_id)
+def add_temp_mapping(bot, trigger_channel_id: int, user_id: int, voice_channel_id: int, text_channel_id: Optional[int] = None) -> None:
+    rec = bot.db.tempvoice.get_tempvoice_by_trigger(trigger_channel_id)
     if not rec:
         return
     m = rec.get("current_map") or {}
     # keep per-user settings here as optional field 'settings'
     m[str(user_id)] = {"voice": int(voice_channel_id), "text": int(text_channel_id) if text_channel_id else None, "settings": {}}
-    DB.tempvoice.update_tempvoice_map(trigger_channel_id, m)
+    bot.db.tempvoice.update_tempvoice_map(trigger_channel_id, m)
 
-def remove_temp_mapping_by_voice(trigger_channel_id: int, voice_channel_id: int) -> None:
-    rec = DB.tempvoice.get_tempvoice_by_trigger(trigger_channel_id)
+def remove_temp_mapping_by_voice(bot, trigger_channel_id: int, voice_channel_id: int) -> None:
+    rec = bot.db.tempvoice.get_tempvoice_by_trigger(trigger_channel_id)
     if not rec:
         return
     m = rec.get("current_map") or {}
     keys = [k for k, v in m.items() if v.get("voice") == int(voice_channel_id)]
     for k in keys:
         del m[k]
-    DB.tempvoice.update_tempvoice_map(trigger_channel_id, m)
+    bot.db.tempvoice.update_tempvoice_map(trigger_channel_id, m)
 
-def remove_temp_mapping_by_user(trigger_channel_id: int, user_id: int) -> None:
-    rec = DB.tempvoice.get_tempvoice_by_trigger(trigger_channel_id)
+def remove_temp_mapping_by_user(bot, trigger_channel_id: int, user_id: int) -> None:
+    rec = bot.db.tempvoice.get_tempvoice_by_trigger(trigger_channel_id)
     if not rec:
         return
     m = rec.get("current_map") or {}
     if str(user_id) in m:
         del m[str(user_id)]
-    DB.tempvoice.update_tempvoice_map(trigger_channel_id, m)
+    bot.db.tempvoice.update_tempvoice_map(trigger_channel_id, m)
 
-def update_user_settings(trigger_channel_id: int, user_id: int, user_settings: dict) -> None:
-    rec = DB.tempvoice.get_tempvoice_by_trigger(trigger_channel_id)
+def update_user_settings(bot, trigger_channel_id: int, user_id: int, user_settings: dict) -> None:
+    rec = bot.db.tempvoice.get_tempvoice_by_trigger(trigger_channel_id)
     if not rec:
         return
     m = rec.get("current_map") or {}
@@ -40,11 +39,11 @@ def update_user_settings(trigger_channel_id: int, user_id: int, user_settings: d
     entry_settings.update(user_settings)
     entry["settings"] = entry_settings
     m[str(user_id)] = entry
-    DB.tempvoice.update_tempvoice_map(trigger_channel_id, m)
+    bot.db.tempvoice.update_tempvoice_map(trigger_channel_id, m)
 
-def get_user_settings(trigger_channel_id: int, user_id: int) -> dict:
+def get_user_settings(bot, trigger_channel_id: int, user_id: int) -> dict:
     """Return merged settings: global settings overridden by per-user settings."""
-    rec = DB.tempvoice.get_tempvoice_by_trigger(trigger_channel_id)
+    rec = bot.db.tempvoice.get_tempvoice_by_trigger(trigger_channel_id)
     if not rec:
         return {}
     global_settings = rec.get("settings") or {}
@@ -113,8 +112,8 @@ def _deserialize_overwrites(serialized: dict, guild: discord.Guild) -> dict:
         out[target] = ow
     return out
 
-def get_temp_channel_for_user(trigger_channel_id: int, user_id: int) -> Optional[int]:
-    rec = DB.tempvoice.get_tempvoice_by_trigger(trigger_channel_id)
+def get_temp_channel_for_user(bot, trigger_channel_id: int, user_id: int) -> Optional[int]:
+    rec = bot.db.tempvoice.get_tempvoice_by_trigger(trigger_channel_id)
     if not rec:
         return None
     m = rec.get("current_map") or {}
@@ -123,8 +122,8 @@ def get_temp_channel_for_user(trigger_channel_id: int, user_id: int) -> Optional
         return None
     return v.get("voice")
 
-def get_all_temp_channels_for_trigger(trigger_channel_id: int) -> list[int]:
-    rec = DB.tempvoice.get_tempvoice_by_trigger(trigger_channel_id)
+def get_all_temp_channels_for_trigger(bot, trigger_channel_id: int) -> list[int]:
+    rec = bot.db.tempvoice.get_tempvoice_by_trigger(trigger_channel_id)
     if not rec:
         return []
     m = rec.get("current_map") or {}

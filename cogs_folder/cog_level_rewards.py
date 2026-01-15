@@ -17,7 +17,7 @@ class level_rewards(commands.Cog):
         interaction: discord.Interaction,
         level: int
     ):
-        interaction.followup.send(try_set_level_reward(interaction, level), ephemeral=True)
+        interaction.followup.send(try_set_level_reward(self.bot, interaction, level), ephemeral=True)
 
 
 

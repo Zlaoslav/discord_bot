@@ -3,12 +3,11 @@ import asyncio
 import sys
 import os
 from services_folder.hlpr_logging import logger
-from db_folder import DB
 from configs_folder.advanced_settings import OWNER_ID
 
 async def notify_after_restart(bot):
     # вызывается из on_ready после того как бот залогинился
-    channel_id = DB.restart_state.pop_restart_channel()
+    channel_id = await bot.db.restart_state.pop_restart_channel()
     if not channel_id:
         return  # ничего не нужно делать
 
@@ -59,7 +58,7 @@ async def restart_process(bot, interaction_or_ctx=None):
         logger.exception(f"Ошибка при подготовке ответа перед рестартом: {e}")
 
     try:
-        DB.restart_state.save_restart_channel(int(channel_id) if channel_id is not None else None)
+        await bot.db.restart_state.save_restart_channel(int(channel_id) if channel_id is not None else None)
     except Exception as e:
         logger.exception(f"Ошибка при сохранении channel_id в БД: {e}")
 
@@ -103,7 +102,7 @@ async def quickrestart_process(bot, interaction_or_ctx=None):
         pass
 
     # сохраняем в БД канал (может быть None)
-    DB.restart_state.save_restart_channel(int(channel_id) if channel_id is not None else None)
+    await bot.db.restart_state.save_restart_channel(int(channel_id) if channel_id is not None else None)
 
     # создаём флаг быстрого перезапуска
     quick_restart_flag = os.path.join(os.path.dirname(__file__), ".quick_restart")

@@ -62,10 +62,11 @@ class CountingRepository:
             f"""
                 SELECT channel_id, next_expected
                 FROM {self.__TABLE}
-                WHERE id = 1
-            """
+                WHERE guild_id = ?
+            """,
+            (guild_id)
         )
-        row = cursor.fetchone()
+        row = await cursor.fetchone()
 
         if not row:
             return None

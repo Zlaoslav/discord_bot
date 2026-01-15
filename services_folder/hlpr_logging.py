@@ -34,7 +34,7 @@ class ColorFormatter(logging.Formatter):
 
 
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 if not logger.hasHandlers():
     handler = logging.StreamHandler()

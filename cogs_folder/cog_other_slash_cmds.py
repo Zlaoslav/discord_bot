@@ -6,7 +6,7 @@ from services_folder.hlpr_logging import logger
 from configs_folder.advanced_settings import BOT_COMMANDS_LIST
 from services_folder.hlpr_send_long import _send_long_followup
 
-class customp_play(commands.Cog):
+class other_slash_cmds(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
@@ -131,3 +131,5 @@ class customp_play(commands.Cog):
             logger.error(e)
 
 
+async def setup(bot: commands.Bot):
+    await bot.add_cog(other_slash_cmds(bot))

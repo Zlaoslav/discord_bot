@@ -35,10 +35,10 @@ class RestartStateRepository:
                 WHERE id = 1
             """
         )
-        row = cursor.fetchone()
+        row = await cursor.fetchone()
         channel_id = row[0] if row else None
         # очищаем
-        cursor.execute(
+        await cursor.execute(
             """
                 UPDATE restart_state
                 SET channel_id = NULL

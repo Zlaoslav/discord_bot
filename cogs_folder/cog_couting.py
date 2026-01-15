@@ -4,13 +4,12 @@ from discord import app_commands
 
 import services_folder.hlpr_perms_manager as perms_manager
 from services_folder.hlpr_logging import logger
-from db_folder import DB
 
 from configs_folder.advanced_settings import _SAFE_NAMES, COUNTER_TOLERANCE
 from services_folder.srv_counting import _preprocess, _check_nodes, _find_names, _eval_node
 import ast
 
-class level_alerts(commands.Cog):
+class counting(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
@@ -88,8 +87,7 @@ class level_alerts(commands.Cog):
             await interaction.response.send_message("Не удалось определить канал.", ephemeral=True)
             return
 
-        # один канал в системе — просто перезаписываем
-        DB.counting.set_counter_channel(interaction.guild.id, int(target.id), start_value=start_value)
+        self.bot.db.counting.set_counter_channel(interaction.guild.id, int(target.id), start_value=start_value)
         await interaction.response.send_message(f"Счётчик установлен в канал {target.mention}. Начинаем с {start_value}.", ephemeral=True)
 
     @app_commands.command(
@@ -105,7 +103,7 @@ class level_alerts(commands.Cog):
             await interaction.response.send_message("У вас нет прав для этой команды.", ephemeral=True)
             return
 
-        DB.counting.unset_counter_channel(interaction.guild.id)
+        self.bot.db.counting.unset_counter_channel(interaction.guild.id)
         await interaction.response.send_message("Счётчик отключён.", ephemeral=True)
     # --- Обработчик входящих сообщений ---
 
@@ -120,7 +118,7 @@ class level_alerts(commands.Cog):
             return
 
         # получаем состояние единственного счётчика
-        cs = DB.counting.get_counter_state(message.guild.id)
+        cs = self.bot.db.counting.get_counter_state(message.guild.id)
         if cs is None:
             return  # счётчик не настроен
 
@@ -158,7 +156,7 @@ class level_alerts(commands.Cog):
                 await message.add_reaction("✅")
             except Exception:
                 pass
-            DB.counting.inc_counter(message.guild.id)
+            self.bot.db.counting.inc_counter(message.guild.id)
         else:
             try:
                 await message.add_reaction("⚠️")
@@ -173,4 +171,4 @@ class level_alerts(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(level_alerts(bot))
+    await bot.add_cog(counting(bot))

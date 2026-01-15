@@ -40,5 +40,5 @@ class LevelAlertsRepository:
             (guild_id)
         )
 
-        row = cursor.fetchone()
+        row = await cursor.fetchone()
         return row[0] if row and row[0] is not None else None

@@ -4,7 +4,7 @@ from discord import app_commands
 import services_folder.hlpr_perms_manager as perms_manager
 from services_folder.hlpr_logging import logger
 
-class customp_play(commands.Cog):
+class debug_cmds(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
@@ -211,3 +211,7 @@ class customp_play(commands.Cog):
 
         text = "\n".join(f"• {perm}" for perm in allowed)
         await interaction.response.send_message(f"**Права бота:**\n```{text}```", ephemeral=True)
+
+
+async def setup(bot: commands.Bot):
+    await bot.add_cog(debug_cmds(bot))

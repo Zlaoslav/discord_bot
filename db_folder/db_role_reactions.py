@@ -52,7 +52,7 @@ class RoleReactionsRepository:
             )
         )
 
-        row = cursor.fetchone()
+        row = await cursor.fetchone()
         return row
 
     async def get_all_role_reactions_for_message(
@@ -70,7 +70,7 @@ class RoleReactionsRepository:
             (message_id)
         )
 
-        rows = cursor.fetchall()
+        rows = await cursor.fetchall()
         return rows
 
     async def delete_role_reaction(

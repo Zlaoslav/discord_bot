@@ -28,8 +28,8 @@ class DB:
     counting: CountingRepository
     restart_state: RestartStateRepository
 
-    def __init__(self, path: str):
-        self.database = Database(path)
+    def __init__(self):
+        self.database = Database(DB_PATH)
 
     async def __init_repos(self) -> None:
         db: aiosqlite.Connection = self.database.db

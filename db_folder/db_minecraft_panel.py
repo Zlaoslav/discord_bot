@@ -1,6 +1,6 @@
 import aiosqlite
 class MinecraftPanelRepository:
-    __TABLE = "minecraft_panels_v3"
+    __TABLE = "minecraft_panels"
 
     def __init__(self, db: aiosqlite.Connection):
         self.db = db
@@ -69,7 +69,7 @@ class MinecraftPanelRepository:
                 FROM {self.__TABLE}
             """
         )
-        panels = cursor.fetchall()
+        panels = await cursor.fetchall()
         return panels
 
     async def get_real_ip_and_query_port(self, guild_id, message_id):
@@ -81,5 +81,5 @@ class MinecraftPanelRepository:
             """, 
             (guild_id, message_id)
         )
-        row = cursor.fetchone()
+        row = await cursor.fetchone()
         return row

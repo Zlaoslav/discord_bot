@@ -38,7 +38,7 @@ def init_db():
 
     # Таблица для join_leave
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS join_leave_v2 (
+        CREATE TABLE IF NOT EXISTS join_leave (
             guild_id INTEGER PRIMARY KEY,
             channel_id INTEGER,
             mention_role_id INTEGER
@@ -105,10 +105,11 @@ def init_db():
     """)
     # Таблица панелей майнкрафта
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS minecraft_panels_v2 (
+        CREATE TABLE IF NOT EXISTS minecraft_panels (
             guild_id INTEGER NOT NULL,
             server_ip TEXT NOT NULL,
             server_port INTEGER NOT NULL,
+            real_ip TEXT,
             query_port INTEGER,
             channel_id INTEGER NOT NULL,
             message_id INTEGER NOT NULL,

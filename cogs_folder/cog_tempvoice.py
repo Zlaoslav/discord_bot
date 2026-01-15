@@ -4,7 +4,6 @@ from discord import app_commands
 import services_folder.hlpr_perms_manager as perms_manager
 from services_folder.hlpr_logging import logger
 from services_folder.srv_tempvoice import get_temp_channel_for_user, get_user_settings, add_temp_mapping, remove_temp_mapping_by_voice, remove_temp_mapping_by_user, _serialize_overwrites, _deserialize_overwrites
-from db_folder import DB
 import time
 class tempvoice(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -32,10 +31,10 @@ class tempvoice(commands.Cog):
 
         try:
             if channel is None:
-                DB.tempvoice.save_tempvoice_trigger(int(interaction.guild.id), 0)
+                self.bot.db.tempvoice.save_tempvoice_trigger(int(interaction.guild.id), 0)
                 await interaction.response.send_message(f"Триггер TempVoice установлен глобально (любое вхождение).", ephemeral=True)
             else:
-                DB.tempvoice.save_tempvoice_trigger(int(interaction.guild.id), int(channel.id))
+                self.bot.db.tempvoice.save_tempvoice_trigger(int(interaction.guild.id), int(channel.id))
                 await interaction.response.send_message(f"Триггер TempVoice установлен: {channel.mention}", ephemeral=True)
         except Exception as e:
             logger.exception(f"Ошибка при установке tempvoice триггера: {e}")
@@ -63,7 +62,7 @@ class tempvoice(commands.Cog):
         try:
             trig_id = int(channel.id) if channel is not None else 0
             # remove DB record
-            DB.tempvoice.remove_tempvoice_trigger(trig_id)
+            self.bot.db.tempvoice.remove_tempvoice_trigger(trig_id)
             await interaction.response.send_message(f"Триггер TempVoice удалён (id={trig_id}).", ephemeral=True)
         except Exception as e:
             logger.exception(f"Ошибка при удалении tempvoice триггера: {e}")
@@ -84,10 +83,10 @@ class tempvoice(commands.Cog):
         # support passing trigger or using global trigger (0)
         rec = None
         if trigger is not None:
-            rec = DB.tempvoice.get_tempvoice_by_trigger(int(trigger.id))
+            rec = self.bot.db.tempvoice.get_tempvoice_by_trigger(int(trigger.id))
         if not rec:
             # try global
-            rec = DB.tempvoice.get_tempvoice_by_trigger(0)
+            rec = self.bot.db.tempvoice.get_tempvoice_by_trigger(0)
         if not rec:
             await interaction.response.send_message("⚠️ Триггер не настроен. Сначала используйте /set_tempvoice.", ephemeral=True)
             return
@@ -106,9 +105,9 @@ class tempvoice(commands.Cog):
                 pass
         # отправим новую (с эмодзи и более дружелюбным текстом)
         trig_key = int(trigger.id) if trigger is not None else (rec.get('trigger_channel_id') or 0)
-        view = TempVoicePanelView(int(trig_key))
+        view = TempVoicePanelView(self.bot, int(trig_key))
         sent = await target.send("🎛️ Панель TempVoice — нажмите кнопки для управления вашим временным каналом.", view=view)
-        DB.tempvoice.set_panel_message_id(int(trig_key), int(sent.id))
+        self.bot.db.tempvoice.set_panel_message_id(int(trig_key), int(sent.id))
         await interaction.response.send_message("✅ Панель TempVoice отправлена.", ephemeral=True)
     
     
@@ -133,14 +132,14 @@ class tempvoice(commands.Cog):
             join_time = self.voice_join_time.pop(key, None)
             if join_time:
                 duration = int(now - join_time)
-                DB.level_users.add_voice_time(member.guild.id, member.id, duration)
+                self.bot.db.level_users.add_voice_time(member.guild.id, member.id, duration)
 
         # Пользователь переключился между каналами
         elif before.channel != after.channel:
             join_time = self.voice_join_time.get(key)
             if join_time:
                 duration = int(now - join_time)
-                DB.level_users.add_voice_time(member.guild.id, member.id, duration)
+                self.bot.db.level_users.add_voice_time(member.guild.id, member.id, duration)
                 self.voice_join_time[key] = now
     
     async def on_tempvoice(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
@@ -151,14 +150,14 @@ class tempvoice(commands.Cog):
         try:
             # если вошёл в канал
             if after.channel is not None and (before.channel is None or before.channel.id != after.channel.id):
-                trig = DB.tempvoice.get_tempvoice_by_trigger(after.channel.id)
+                trig = self.bot.db.tempvoice.get_tempvoice_by_trigger(after.channel.id)
                 # try global trigger (0) if specific trigger not found
                 if not trig:
-                    trig = DB.tempvoice.get_tempvoice_by_trigger(0)
+                    trig = self.bot.db.tempvoice.get_tempvoice_by_trigger(0)
                 if trig:
                     guild = after.channel.guild
                     # если у пользователя уже есть temp-канал — переместить
-                    existing = get_temp_channel_for_user(after.channel.id, member.id)
+                    existing = get_temp_channel_for_user(self.bot, after.channel.id, member.id)
                     if existing:
                         ch = guild.get_channel(int(existing))
                         if ch:
@@ -171,7 +170,7 @@ class tempvoice(commands.Cog):
                     trig_key = trig.get('trigger_channel_id') or 0
                     settings = trig.get('settings') or {}
                     # merge per-user settings
-                    user_merged = get_user_settings(trig_key, member.id) or {}
+                    user_merged = get_user_settings(self.bot, trig_key, member.id) or {}
                     final_settings = dict(settings)
                     final_settings.update(user_merged)
                     prefix = final_settings.get('prefix', 'TempVoice ')
@@ -250,7 +249,7 @@ class tempvoice(commands.Cog):
                     # Не создаём отдельный текстовый канал — используем встроенный связанный чат голосового канала.
                     # Сохраняем mapping (текстовый канал не применяется)
                     trig_key = trig.get('trigger_channel_id') or 0
-                    add_temp_mapping(int(trig_key), member.id, ch.id, None)
+                    add_temp_mapping(self.bot, int(trig_key), member.id, ch.id, None)
 
                     # пытаемся переместить пользователя
                     try:
@@ -261,7 +260,7 @@ class tempvoice(commands.Cog):
             # выход из канала — если ушёл из временного канала, проверить на удаление
             if before.channel is not None and (after.channel is None or (after.channel is not None and before.channel.id != after.channel.id)):
                 # проверяем все триггеры сервера
-                for rec in DB.tempvoice.get_tempvoice_by_guild(member.guild.id):
+                for rec in self.bot.db.tempvoice.get_tempvoice_by_guild(member.guild.id):
                     mapping = rec.get('current_map') or {}
                     # если before.channel.id — один из temp каналов
                     for k, v in list(mapping.items()):
@@ -275,32 +274,34 @@ class tempvoice(commands.Cog):
                                     except Exception:
                                         pass
                                     # удалить маппинг
-                                    remove_temp_mapping_by_voice(rec.get('trigger_channel_id'), int(v.get('voice')))
+                                    remove_temp_mapping_by_voice(self.bot, rec.get('trigger_channel_id'), int(v.get('voice')))
                             else:
                                 # канал не найден — удаляем запись
-                                remove_temp_mapping_by_voice(rec.get('trigger_channel_id'), int(v.get('voice')))
+                                remove_temp_mapping_by_voice(self.bot, rec.get('trigger_channel_id'), int(v.get('voice')))
         except Exception as e:
             logger.exception(f"Ошибка в on_voice_state_update (tempvoice): {e}")
 
 
 
 class TempVoicePanelView(discord.ui.View):
-    def __init__(self, trigger_channel_id: int):
+    def __init__(self, bot, trigger_channel_id: int):
         super().__init__(timeout=None)
+        self.bot = bot
         self.trigger_channel_id = trigger_channel_id
         
     @discord.ui.button(label="⚙️ Настройки", style=discord.ButtonStyle.secondary, custom_id="tv_settings")
     async def settings_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         # отправим приватное (ephemeral) сообщение с опциями
-        await interaction.response.send_message("Выберите действие настройки (будут применяться к вашему временно созданному каналу):", view=SettingsOptionsView(self.trigger_channel_id), ephemeral=True)
+        await interaction.response.send_message("Выберите действие настройки (будут применяться к вашему временно созданному каналу):", view=SettingsOptionsView(self.bot, self.trigger_channel_id), ephemeral=True)
 
     @discord.ui.button(label="🔐 Права входа", style=discord.ButtonStyle.secondary, custom_id="tv_perms")
     async def perms_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("Управление правами входа для TempVoice (ваш канал):", view=PermsOptionsView(self.trigger_channel_id), ephemeral=True)
+        await interaction.response.send_message("Управление правами входа для TempVoice (ваш канал):", view=PermsOptionsView(self.bot, self.trigger_channel_id), ephemeral=True)
 
 class SettingsOptionsView(discord.ui.View):
-    def __init__(self, trigger_channel_id: int):
+    def __init__(self, bot, trigger_channel_id: int):
         super().__init__(timeout=120)
+        self.bot = bot
         self.trigger_channel_id = trigger_channel_id
 
     @discord.ui.button(label="✏️ Изменить название", style=discord.ButtonStyle.primary)
@@ -312,11 +313,11 @@ class SettingsOptionsView(discord.ui.View):
             async def on_submit(self_inner, modal_inter: discord.Interaction):
                 new_name_val = self_inner.new_name.value.strip()
                 # пытаемся найти temp канал пользователя
-                rec = DB.tempvoice.get_tempvoice_by_trigger(self.trigger_channel_id)
+                rec = self.bot.db.tempvoice.get_tempvoice_by_trigger(self.trigger_channel_id)
                 if not rec:
                     await modal_inter.response.send_message("Триггер не найден.", ephemeral=True)
                     return
-                voice_id = get_temp_channel_for_user(self.trigger_channel_id, modal_inter.user.id)
+                voice_id = get_temp_channel_for_user(self.bot, self.trigger_channel_id, modal_inter.user.id)
                 if not voice_id:
                     await modal_inter.response.send_message("У вас нет созданного временного канала.", ephemeral=True)
                     return
@@ -345,7 +346,7 @@ class SettingsOptionsView(discord.ui.View):
                 except Exception:
                     await modal_inter.response.send_message("Неправильное число.", ephemeral=True)
                     return
-                voice_id = get_temp_channel_for_user(self.trigger_channel_id, modal_inter.user.id)
+                voice_id = get_temp_channel_for_user(self.bot, self.trigger_channel_id, modal_inter.user.id)
                 if not voice_id:
                     await modal_inter.response.send_message("У вас нет созданного временного канала.", ephemeral=True)
                     return
@@ -373,7 +374,7 @@ class SettingsOptionsView(discord.ui.View):
                 except Exception:
                     await modal_inter.response.send_message("Неправильное число.", ephemeral=True)
                     return
-                voice_id = get_temp_channel_for_user(self.trigger_channel_id, modal_inter.user.id)
+                voice_id = get_temp_channel_for_user(self.bot, self.trigger_channel_id, modal_inter.user.id)
                 if not voice_id:
                     await modal_inter.response.send_message("У вас нет созданного временного канала.", ephemeral=True)
                     return
@@ -393,7 +394,7 @@ class SettingsOptionsView(discord.ui.View):
     @discord.ui.button(label="💬 Вкл/Выкл чат", style=discord.ButtonStyle.secondary)
     async def toggle_chat(self, interaction: discord.Interaction, button: discord.ui.Button):
         # переключим chat_enabled в настройках триггера и создадим/удалим текстовый канал
-        voice_id = get_temp_channel_for_user(self.trigger_channel_id, interaction.user.id)
+        voice_id = get_temp_channel_for_user(self.bot, self.trigger_channel_id, interaction.user.id)
         if not voice_id:
             await interaction.response.send_message("У вас нет созданного временного канала.", ephemeral=True)
             return
@@ -401,13 +402,13 @@ class SettingsOptionsView(discord.ui.View):
         if not channel:
             await interaction.response.send_message("Канал не найден.", ephemeral=True)
             return
-        rec = DB.tempvoice.get_tempvoice_by_trigger(self.trigger_channel_id)
+        rec = self.bot.db.tempvoice.get_tempvoice_by_trigger(self.trigger_channel_id)
         if not rec:
             await interaction.response.send_message("Триггер не найден.", ephemeral=True)
             return
         settings = rec.get("settings") or {}
         settings["chat_enabled"] = not bool(settings.get("chat_enabled"))
-        DB.tempvoice.update_tempvoice_settings(self.trigger_channel_id, settings)
+        self.bot.db.tempvoice.update_tempvoice_settings(self.trigger_channel_id, settings)
 
         role = interaction.guild.default_role
         await channel.set_permissions(role, send_messages=settings["chat_enabled"])
@@ -420,7 +421,7 @@ class SettingsOptionsView(discord.ui.View):
 
     @discord.ui.button(label="🔒 Заблокировать/Разблокировать", style=discord.ButtonStyle.danger)
     async def lock_unlock(self, interaction: discord.Interaction, button: discord.ui.Button):
-        rec = DB.tempvoice.get_tempvoice_by_trigger(self.trigger_channel_id)
+        rec = self.bot.db.tempvoice.get_tempvoice_by_trigger(self.trigger_channel_id)
         if not rec:
             await interaction.response.send_message("Триггер не найден.", ephemeral=True)
             return
@@ -429,7 +430,7 @@ class SettingsOptionsView(discord.ui.View):
         settings['locked'] = locked_now
 
         # применим к текущему каналу пользователя
-        voice_id = get_temp_channel_for_user(self.trigger_channel_id, interaction.user.id)
+        voice_id = get_temp_channel_for_user(self.bot, self.trigger_channel_id, interaction.user.id)
         if voice_id:
             ch = interaction.guild.get_channel(int(voice_id))
             if ch:
@@ -479,27 +480,27 @@ class SettingsOptionsView(discord.ui.View):
                                 await ch.set_permissions(interaction.guild.default_role, connect=True)
                         except Exception as e:
                             logger.warning(f"Ошибка при восстановлении overwrites: {e}")
-                    DB.tempvoice.update_tempvoice_settings(self.trigger_channel_id, settings)
+                    self.bot.db.tempvoice.update_tempvoice_settings(self.trigger_channel_id, settings)
                     await interaction.response.send_message(f"locked = {settings['locked']}", ephemeral=True)
                     return
                 except Exception as e:
                     logger.warning(e)
         else:
             # нет временного канала у пользователя — просто переключаем флаг
-            DB.tempvoice.update_tempvoice_settings(self.trigger_channel_id, settings)
+            self.bot.db.tempvoice.update_tempvoice_settings(self.trigger_channel_id, settings)
             await interaction.response.send_message(f"locked установлено: {settings['locked']}", ephemeral=True)
 
     @discord.ui.button(label="🚪 Отключить участника", style=discord.ButtonStyle.danger)
     async def disconnect_member(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Предоставляем список участников только из вашего временного канала
-        voice_id = get_temp_channel_for_user(self.trigger_channel_id, interaction.user.id)
+        voice_id = get_temp_channel_for_user(self.bot, self.trigger_channel_id, interaction.user.id)
         if not voice_id:
             await interaction.response.send_message("У вас нет временного канала.", ephemeral=True)
             return
         ch = interaction.guild.get_channel(int(voice_id))
         if not ch:
             await interaction.response.send_message("Канал не найден.", ephemeral=True)
-            remove_temp_mapping_by_user(self.trigger_channel_id, interaction.user.id)
+            remove_temp_mapping_by_user(self.bot, self.trigger_channel_id, interaction.user.id)
             return
 
         members = [m for m in ch.members if not m.bot and m.id != interaction.user.id]
@@ -546,13 +547,13 @@ class SettingsOptionsView(discord.ui.View):
 
     @discord.ui.button(label="🗑️ Удалить мой канал", style=discord.ButtonStyle.danger)
     async def delete_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        voice_id = get_temp_channel_for_user(self.trigger_channel_id, interaction.user.id)
+        voice_id = get_temp_channel_for_user(self.bot, self.trigger_channel_id, interaction.user.id)
         if not voice_id:
             await interaction.response.send_message("У вас нет созданного временного канала.", ephemeral=True)
             return
         ch = interaction.guild.get_channel(int(voice_id))
         if not ch:
-            remove_temp_mapping_by_user(self.trigger_channel_id, interaction.user.id)
+            remove_temp_mapping_by_user(self.bot, self.trigger_channel_id, interaction.user.id)
             await interaction.response.send_message("Канал не найден, запись удалена.", ephemeral=True)
             return
         # Показываем подтверждение (ephemeral) с кнопками
@@ -572,7 +573,7 @@ class SettingsOptionsView(discord.ui.View):
                 try:
                     if self.voice_channel:
                         await self.voice_channel.delete()
-                    remove_temp_mapping_by_user(self.trig_id, self.user_id)
+                    remove_temp_mapping_by_user(self.bot, self.trig_id, self.user_id)
                     await i.response.edit_message(content="Ваш временный канал удалён.", view=None)
                 except Exception as e:
                     logger.warning(e)
@@ -589,22 +590,24 @@ class SettingsOptionsView(discord.ui.View):
         await interaction.response.send_message("Подтвердите удаление вашего временного канала:", view=view, ephemeral=True)
 
 class PermsOptionsView(discord.ui.View):
-    def __init__(self, trigger_channel_id: int):
+    def __init__(self, bot, trigger_channel_id: int):
         super().__init__(timeout=120)
+        self.bot = bot
         self.trigger_channel_id = trigger_channel_id
 
     async def ask_list_and_update(self, interaction: discord.Interaction, field: str, add: bool = True):
         # Показываем ephemeral сообщение с UserSelect для выбора пользователей
         class UsersSelect(discord.ui.UserSelect):
-            def __init__(self, trig_id, field_name, add_flag):
+            def __init__(self, bot, trig_id, field_name, add_flag):
                 super().__init__(placeholder="Выберите пользователей...", min_values=1, max_values=25)
+                self.bot = bot
                 self.trig_id = trig_id
                 self.field_name = field_name
                 self.add_flag = add_flag
 
             async def callback(self, select_inter: discord.Interaction):
                 ids = [u.id for u in self.values]
-                rec = DB.tempvoice.get_tempvoice_by_trigger(self.trig_id)
+                rec = self.bot.db.tempvoice.get_tempvoice_by_trigger(self.trig_id)
                 if not rec:
                     await select_inter.response.send_message("⚠️ Триггер не найден.", ephemeral=True)
                     return
@@ -619,11 +622,11 @@ class PermsOptionsView(discord.ui.View):
                         if i in lst:
                             lst.remove(i)
                 settings[self.field_name] = lst
-                DB.tempvoice.update_tempvoice_settings(self.trig_id, settings)
+                self.bot.db.tempvoice.update_tempvoice_settings(self.trig_id, settings)
                 await select_inter.response.edit_message(content=f"✅ Обновлено поле {self.field_name} (count={len(lst)})", view=None)
 
         view = discord.ui.View(timeout=60)
-        view.add_item(UsersSelect(self.trigger_channel_id, field, add))
+        view.add_item(UsersSelect(self.bot, self.trigger_channel_id, field, add))
         await interaction.response.send_message(f"Выберите пользователей для `{field}`:", view=view, ephemeral=True)
 
     @discord.ui.button(label="✅ Разрешить пользователей", style=discord.ButtonStyle.primary)
@@ -661,15 +664,16 @@ class PermsOptionsView(discord.ui.View):
     async def ask_list_and_update_roles(self, interaction: discord.Interaction, field: str, add: bool = True):
         # Показываем эпхемерный RoleSelect для выбора ролей
         class RolesSelect(discord.ui.RoleSelect):
-            def __init__(self, trig_id, field_name, add_flag):
+            def __init__(self, bot, trig_id, field_name, add_flag):
                 super().__init__(placeholder="Выберите роли...", min_values=1, max_values=25)
+                self.bot = bot
                 self.trig_id = trig_id
                 self.field_name = field_name
                 self.add_flag = add_flag
 
             async def callback(self, select_inter: discord.Interaction):
                 ids = [r.id for r in self.values]
-                rec = DB.tempvoice.get_tempvoice_by_trigger(self.trig_id)
+                rec = self.bot.db.tempvoice.get_tempvoice_by_trigger(self.trig_id)
                 if not rec:
                     await select_inter.response.send_message("⚠️ Триггер не найден.", ephemeral=True)
                     return
@@ -684,24 +688,24 @@ class PermsOptionsView(discord.ui.View):
                         if i in lst:
                             lst.remove(i)
                 settings[self.field_name] = lst
-                DB.tempvoice.update_tempvoice_settings(self.trig_id, settings)
+                self.bot.db.tempvoice.update_tempvoice_settings(self.trig_id, settings)
                 await select_inter.response.edit_message(content=f"✅ Обновлено поле {self.field_name} (count={len(lst)})", view=None)
 
         view = discord.ui.View(timeout=60)
-        view.add_item(RolesSelect(self.trigger_channel_id, field, add))
+        view.add_item(RolesSelect(self.bot, self.trigger_channel_id, field, add))
         await interaction.response.send_message(f"Выберите роли для `{field}`:", view=view, ephemeral=True)
 
     @commands.Cog.listener()
-    def on_ready(self):
+    async def on_ready(self):
         try:
             # Регистрируем для всех записей из БД, используя guild_id и panel_message_id
-            recs = DB.tempvoice.get_all_tempvoices()
+            recs = self.bot.db.tempvoice.get_all_tempvoices()
             for rec in (recs or []):
                 panel_id = rec.get('panel_message_id')
                 trig = rec.get('trigger_channel_id') or 0
                 if panel_id:
                     try:
-                        self.bot.add_view(TempVoicePanelView(int(trig)), message_id=int(panel_id))
+                        self.bot.add_view(TempVoicePanelView(self.bot, int(trig)), message_id=int(panel_id))
                         logger.debug(f"Registered TempVoice view for message {panel_id} (trigger={trig}, guild={rec.get('guild_id')})")
                     except Exception as e:
                         logger.warning(f"Не удалось зарегистрировать TempVoice view для message {panel_id}: {e}")

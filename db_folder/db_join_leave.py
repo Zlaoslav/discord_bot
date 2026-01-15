@@ -2,7 +2,7 @@ import aiosqlite
 from typing import Optional
 
 class JoinLeaveRepository:
-    __TABLE = "join_leave_v2"
+    __TABLE = "join_leave"
 
     def __init__(self, db: aiosqlite.Connection):
         self.db = db
@@ -33,7 +33,7 @@ class JoinLeaveRepository:
             """,
             (guild_id)
         )
-        row = cursor.fetchone()
+        row = await cursor.fetchone()
         channel_id = row[0] if row else None
         role_id = row[1] if row else None
         return channel_id, role_id

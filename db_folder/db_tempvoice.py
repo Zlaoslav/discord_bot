@@ -77,7 +77,7 @@ class TempvoiceRepository:
             """,
             (trigger_channel_id,)
         )
-        row = cursor.fetchone()
+        row = await cursor.fetchone()
         if not row:
             return None
         tid, guild_id, trig_id, panel_id, settings_json, map_json = row
@@ -104,7 +104,7 @@ class TempvoiceRepository:
             """,
             (guild_id,)
         )
-        rows = cursor.fetchall()
+        rows = await cursor.fetchall()
 
         out = []
         for row in rows:
@@ -129,7 +129,7 @@ class TempvoiceRepository:
                 FROM {self.__TABLE}
             """
         )
-        rows = cursor.fetchall()
+        rows = await cursor.fetchall()
         out = []
         for row in rows:
             tid, guild_id, trig_id, panel_id, settings_json, map_json = row

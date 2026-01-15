@@ -1,16 +1,14 @@
-from db_folder import DB
 from configs_folder.advanced_settings import DAILY_REQUEST_LIMIT, BOT_COMMANDS_LIST, GEMINI_SYSTEM_PROMPT
 from google import genai
 
-
-def get_remaining_requests(user_id: int) -> int:
+def get_remaining_requests(bot, user_id: int) -> int:
     """Возвращает, сколько запросов осталось у пользователя сегодня."""
-    used = DB.daily_requests.get_count(user_id)
+    used = bot.db.daily_requests.get_count(user_id)
     rem = DAILY_REQUEST_LIMIT - used
     return rem if rem >= 0 else 0
 
-def increment_user_daily_count(user_id: int) -> int:
-    return DB.daily_requests.increment(user_id)
+def increment_user_daily_count(bot, user_id: int) -> int:
+    return bot.db.daily_requests.increment(user_id)
 
 gemini_client = genai.Client() # необходимо указать перед запуском os.environ["GEMINI_API_KEY"] = config_setings["GEMINI_TOKEN"]
 

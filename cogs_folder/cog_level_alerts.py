@@ -3,7 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 import services_folder.hlpr_perms_manager as perms_manager
 from services_folder.hlpr_logging import logger
-from db_folder import DB
+
 
 class level_alerts(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -13,7 +13,12 @@ class level_alerts(commands.Cog):
         name="set_level_alerts_channel",
         description="Установить канал для уведомлений о повышении уровня (owner only)"
     )
-    async def set_level_alerts_channel_cmd(interaction: discord.Interaction, channel: discord.TextChannel | None = None):
+    async def set_level_alerts_channel_cmd(
+        self,
+        interaction: discord.Interaction,
+        channel: discord.TextChannel | None = None
+    ):
+        
         if interaction.guild is None:
             await interaction.response.send_message("Команда доступна только на сервере.", ephemeral=True)
             return
@@ -21,7 +26,7 @@ class level_alerts(commands.Cog):
             await interaction.response.send_message("У вас недостаточно прав для этой команды.", ephemeral=True)
             return
         try:
-            DB.level_alerts.save_level_alerts_channel(interaction.guild.id, channel.id if channel else None)
+            self.bot.db.level_alerts.save_level_alerts_channel(interaction.guild.id, channel.id if channel else None)
             if channel:
                 await interaction.response.send_message(f"Канал для уведомлений о повышении уровня установлен: {channel.mention}", ephemeral=True)
             else:

@@ -27,7 +27,7 @@ class Askgpt(commands.Cog):
         is_privileged = hlpr_perms_manager.has_perm(interaction.user.id, hlpr_perms_manager.PermRole.OWNER) or hlpr_perms_manager.has_perm(interaction.user.id, hlpr_perms_manager.PermRole.HOST)
 
         if not is_privileged:
-            remaining = get_remaining_requests(interaction.user.id)
+            remaining = get_remaining_requests(self.bot, interaction.user.id)
             if remaining <= 0:
                 await interaction.followup.send(f"Лимит запросов на сегодня исчерпан (максимум {DAILY_REQUEST_LIMIT}/день).", ephemeral=True)
                 logger.debug(f"{interaction.user.name} exceeded daily askgpt limit")
@@ -36,7 +36,7 @@ class Askgpt(commands.Cog):
         try:
             # увеличиваем счётчик для непривилегированных пользователей
             if not is_privileged:
-                increment_user_daily_count(interaction.user.id)
+                increment_user_daily_count(self.bot, interaction.user.id)
 
             response = ask_gemini(usermessage)
 

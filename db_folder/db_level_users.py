@@ -22,7 +22,7 @@ class LevelUsersRepository:
             (guild_id, user_id)
         )
 
-        row = cursor.fetchone()
+        row = await cursor.fetchone()
         return row[0] if row else 0
 
     async def add_xp(
@@ -61,7 +61,7 @@ class LevelUsersRepository:
             (guild_id, user_id)
         )
 
-        row = cursor.fetchone()
+        row = await cursor.fetchone()
         return row[0] if row else 0
 
     async def add_voice_time(
@@ -99,7 +99,7 @@ class LevelUsersRepository:
             """, (guild_id, user_id)
         )
 
-        row = cursor.fetchone()
+        row = await cursor.fetchone()
         return row[0] if row else 0
 
     async def set_user_level(

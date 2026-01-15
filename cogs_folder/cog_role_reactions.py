@@ -3,7 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 import services_folder.hlpr_perms_manager as perms_manager
 from services_folder.hlpr_logging import logger
-from db_folder import DB
+
 
 class role_reactions(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -50,7 +50,7 @@ class role_reactions(commands.Cog):
 
         # Сохраняем в БД
         try:
-            DB.role_reactions.save_role_reaction(message.id, channel.id, emoji, role.id)
+            self.bot.db.role_reactions.save_role_reaction(message.id, channel.id, emoji, role.id)
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка при сохранении в БД: {e}", ephemeral=True)
             await message.delete()
@@ -70,7 +70,7 @@ class role_reactions(commands.Cog):
         ):
         """Обработчик удаления сообщения - удаляет role_reaction из БД."""
         try:
-            DB.role_reactions.delete_role_reaction(payload.message_id)
+            self.bot.db.role_reactions.delete_role_reaction(payload.message_id)
         except Exception as e:
             logger.error(f"Ошибка при удалении role_reaction из БД: {e}")
 
@@ -85,7 +85,7 @@ class role_reactions(commands.Cog):
 
         # Получаем информацию о роле из БД
         emoji_str = str(payload.emoji)
-        role_data = DB.role_reactions.get_role_reaction(payload.message_id, emoji_str)
+        role_data = self.bot.db.role_reactions.get_role_reaction(payload.message_id, emoji_str)
 
         if not role_data:
             return  # Нет роли для этой реакции
@@ -135,7 +135,7 @@ class role_reactions(commands.Cog):
 
         # Получаем информацию о роле из БД
         emoji_str = str(payload.emoji)
-        role_data = DB.role_reactions.get_role_reaction(payload.message_id, emoji_str)
+        role_data = self.bot.db.role_reactions.get_role_reaction(payload.message_id, emoji_str)
 
         if not role_data:
             return  # Нет роли для этой реакции

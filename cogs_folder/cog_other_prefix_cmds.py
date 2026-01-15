@@ -20,6 +20,11 @@ def format_duration(seconds: int) -> str:
 class other_prefix_cmds(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        try:
+            self.bot.remove_command('help')
+        except Exception:
+            pass
+
 
     @commands.command(name="дай_пять")
     async def give_five(self, ctx: commands.Context):
@@ -29,6 +34,7 @@ class other_prefix_cmds(commands.Cog):
     async def ping_cmd(self, ctx: commands.Context):
         uptime = int(time.time() - START_TIME)
         await ctx.send(f"Host:{HOSTNAME}({USERNAME})\nUptime: {format_duration(uptime)}\nPing: {round(self.bot.latency * 1000)} ms\n Version: {CODEVERSION}")
+
 
     @commands.command(name="help")
     async def help_prefix(self, ctx: commands.Context):

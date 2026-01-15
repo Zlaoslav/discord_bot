@@ -4,7 +4,7 @@ from discord import app_commands
 
 import random
 
-class customp_play(commands.Cog):
+class dice(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
@@ -54,3 +54,7 @@ class customp_play(commands.Cog):
             await interaction.response.send_message(f"Подкинув кубик от {start} до {end} выпало: `{random.randint(start, end)}`")
         except:
             await interaction.response.send_message("Ошибка, недопустимые числа!", ephemeral=True)
+
+
+async def setup(bot: commands.Bot):
+    await bot.add_cog(dice(bot))

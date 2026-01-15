@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 from services_folder.srv_level_users import try_give_xp, xp_to_level, xp_left_to_next_level
 import services_folder.hlpr_perms_manager as perms_manager
-from db_folder import DB
+
 
 def format_duration(seconds: int) -> str:
     d, seconds = divmod(seconds, 86400)
@@ -35,12 +35,12 @@ class level_xp(commands.Cog):
         guild_id = interaction.guild.id
         user_id = member.id
 
-        level = xp_to_level(guild_id, user_id)
-        xp_left = xp_left_to_next_level(guild_id, user_id)
-        voice_time = format_duration(DB.level_users.get_voice_time(guild_id, user_id))
+        level = xp_to_level(self.bot, guild_id, user_id)
+        xp_left = xp_left_to_next_level(self.bot, guild_id, user_id)
+        voice_time = format_duration(self.bot.db.level_users.get_voice_time(guild_id, user_id))
         if voice_time == "" or voice_time == None:
             voice_time = "-"
-        xp = DB.level_users.get_xp(guild_id, user_id)
+        xp = self.bot.db.level_users.get_xp(guild_id, user_id)
 
         embed = discord.Embed(
             title=member.display_name,
