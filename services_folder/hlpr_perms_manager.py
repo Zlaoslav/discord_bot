@@ -33,7 +33,7 @@ __all__ = [
     "INDEPENDENT_ROLES"
 ]
 # Путь к файлу с правами
-PERMS_FILE = Path(__file__).parent / "perms_data.json"
+PERMS_FILE = Path(__file__).parent.parent / "configs_folder" / "perms_data.json"
 
 
 class PermRole(Enum):
@@ -271,7 +271,7 @@ def can_manage_role(manager_id: int, target_id: int, role: PermRole) -> tuple[bo
 def get_role_description(role: PermRole) -> str:
     """Возвращает описание роли."""
     descriptions = {
-        PermRole.HOST: "🔴 Роль хоста, если её вам выдали значит Slavik вам ОЧЕНЬ доверяет, позволяет использовать любые команды, включая eval()",
+        PermRole.HOST: "🔴 Роль хоста, если её вам выдали значит Slavik вам ОЧЕНЬ доверяет, позволяет использовать любые команды, включая eval() (я вас обманув, нету команды eval())",
         PermRole.OWNER: "🟠 Владелец, все права которые не могут повлиять на работу бота, так же если вам её выдали значит вам доверяют",
         PermRole.PERMSMANAGER: "🟡 Админ, может менять права других",
         PermRole.MODERATOR: "🔵 Типо модератор да он крутой да да да ",

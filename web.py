@@ -294,10 +294,10 @@ async def auth_callback(code: Optional[str] = None, state: Optional[str] = None,
 
     # Filter guilds: keep guilds where user has ADMINISTRATOR (0x8) or MANAGE_GUILD (0x20), and bot is present OR user has HOST role
     allowed = []
-    from .configs_folder import perms_manager
-    from .configs_folder.perms_manager import PermRole
+    from .services_folder import hlpr_perms_manager
+    from .services_folder.hlpr_perms_manager import PermRole
 
-    user_has_host = perms_manager.has_perm(user_id, PermRole.HOST)
+    user_has_host = hlpr_perms_manager.has_perm(user_id, PermRole.HOST)
     bot_guild_ids = set(g.id for g in (BOT.guilds if BOT else []))
 
     for g in guilds:
@@ -426,10 +426,10 @@ async def auth_exchange(item: Dict[str, Any], request: Request):
 
     # compute allowed guilds
     allowed = []
-    from .configs_folder import perms_manager
-    from .configs_folder.perms_manager import PermRole
+    from .services_folder import hlpr_perms_manager
+    from .services_folder.hlpr_perms_manager import PermRole
 
-    user_has_host = perms_manager.has_perm(user_id, PermRole.HOST)
+    user_has_host = hlpr_perms_manager.has_perm(user_id, PermRole.HOST)
     bot_guild_ids = set(g.id for g in (BOT.guilds if BOT else []))
 
     for g in guilds:
@@ -488,10 +488,10 @@ async def api_guilds(user=Depends(get_current_user)):
 async def get_guild_config(guild_id: int, user=Depends(get_current_user)):
     user_id = user.get("user_id")
     allowed = user.get("allowed_guilds", [])
-    from .configs_folder import perms_manager
-    from .configs_folder.perms_manager import PermRole
+    from .services_folder import hlpr_perms_manager
+    from .services_folder.hlpr_perms_manager import PermRole
 
-    is_host = perms_manager.has_perm(user_id, PermRole.HOST)
+    is_host = hlpr_perms_manager.has_perm(user_id, PermRole.HOST)
     is_admin = guild_id in allowed
     if not (is_host or is_admin):
         raise HTTPException(status_code=403, detail="Forbidden")
@@ -518,10 +518,10 @@ async def post_guild_config(guild_id: int, body: Dict[str, Any], request: Reques
 
     user_id = user.get("user_id")
     allowed = user.get("allowed_guilds", [])
-    from .configs_folder import perms_manager
-    from .configs_folder.perms_manager import PermRole
+    from .services_folder import hlpr_perms_manager
+    from .services_folder.hlpr_perms_manager import PermRole
 
-    is_host = perms_manager.has_perm(user_id, PermRole.HOST)
+    is_host = hlpr_perms_manager.has_perm(user_id, PermRole.HOST)
     is_admin = guild_id in allowed
     if not (is_host or is_admin):
         raise HTTPException(status_code=403, detail="Forbidden")
