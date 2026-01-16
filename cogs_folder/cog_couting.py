@@ -1,3 +1,4 @@
+from bot import Bot
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -10,7 +11,7 @@ from services_folder.srv_counting import _preprocess, _check_nodes, _find_names,
 import ast
 
 class counting(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: Bot):
         self.bot = bot
 
     @app_commands.command(
@@ -87,7 +88,7 @@ class counting(commands.Cog):
             await interaction.response.send_message("Не удалось определить канал.", ephemeral=True)
             return
 
-        self.bot.db.counting.set_counter_channel(interaction.guild.id, int(target.id), start_value=start_value)
+        await self.bot.db.counting.set_counter_channel(interaction.guild.id, int(target.id), start_value=start_value)
         await interaction.response.send_message(f"Счётчик установлен в канал {target.mention}. Начинаем с {start_value}.", ephemeral=True)
 
     @app_commands.command(
@@ -103,7 +104,7 @@ class counting(commands.Cog):
             await interaction.response.send_message("У вас нет прав для этой команды.", ephemeral=True)
             return
 
-        self.bot.db.counting.unset_counter_channel(interaction.guild.id)
+        await self.bot.db.counting.unset_counter_channel(interaction.guild.id)
         await interaction.response.send_message("Счётчик отключён.", ephemeral=True)
     # --- Обработчик входящих сообщений ---
 
@@ -118,7 +119,7 @@ class counting(commands.Cog):
             return
 
         # получаем состояние единственного счётчика
-        cs = self.bot.db.counting.get_counter_state(message.guild.id)
+        cs = await self.bot.db.counting.get_counter_state(message.guild.id)
         if cs is None:
             return  # счётчик не настроен
 
@@ -156,7 +157,7 @@ class counting(commands.Cog):
                 await message.add_reaction("✅")
             except Exception:
                 pass
-            self.bot.db.counting.inc_counter(message.guild.id)
+            await self.bot.db.counting.inc_counter(message.guild.id)
         else:
             try:
                 await message.add_reaction("⚠️")
@@ -170,5 +171,5 @@ class counting(commands.Cog):
 
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: Bot):
     await bot.add_cog(counting(bot))

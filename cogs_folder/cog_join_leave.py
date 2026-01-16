@@ -1,3 +1,4 @@
+from bot import Bot
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -5,7 +6,7 @@ import services_folder.hlpr_perms_manager as perms_manager
 from services_folder.hlpr_logging import logger
 
 class join_leave(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: Bot):
         self.bot = bot
 
 
@@ -30,7 +31,7 @@ class join_leave(commands.Cog):
             return
         targetchanel = channel or interaction.channel
         try:
-            self.bot.db.join_leave.save_join_leave_channel(targetchanel.id, mention_role.id)
+            await self.bot.db.join_leave.save_join_leave_channel(targetchanel.id, mention_role.id)
             await interaction.response.send_message("Успешно!", ephemeral=True)
         except Exception as e:
             logger.error(e)
@@ -39,7 +40,7 @@ class join_leave(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_remove(self, member):
-        channel_id, role_id = self.bot.db.join_leave.get_join_leave_channel(member.guild.id)
+        channel_id, role_id = await self.bot.db.join_leave.get_join_leave_channel(member.guild.id)
         if channel_id == None:
             return
 
@@ -54,7 +55,7 @@ class join_leave(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
-        channel_id, role_id = self.bot.db.join_leave.get_join_leave_channel(member.guild.id)
+        channel_id, role_id = await self.bot.db.join_leave.get_join_leave_channel(member.guild.id)
         if channel_id == None:
             return
 
@@ -73,5 +74,5 @@ class join_leave(commands.Cog):
 
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: Bot):
     await bot.add_cog(join_leave(bot))

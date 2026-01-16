@@ -1,3 +1,4 @@
+from bot import Bot
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -10,7 +11,7 @@ import yt_dlp
 
 YTDL = yt_dlp.YoutubeDL(YTDL_OPTS)
 customplay_queue = asyncio.Queue()
-async def play_next(bot, vc):
+async def play_next(bot: Bot, vc):
     if customplay_queue.empty():
         return
 
@@ -34,7 +35,7 @@ async def play_next(bot, vc):
     )
 
 class custom_play(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: Bot):
         self.bot = bot
 
     @app_commands.command(
@@ -147,5 +148,5 @@ class custom_play(commands.Cog):
             await interaction.response.send_message("Бот не подключён к голосовому каналу.")
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: Bot):
     await bot.add_cog(custom_play(bot))

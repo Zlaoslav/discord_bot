@@ -1,3 +1,4 @@
+from bot import Bot
 import discord
 from mcstatus import JavaServer
 from services_folder.hlpr_logging import logger
@@ -7,7 +8,7 @@ import re
 import json
 
 class MinecraftPlayersView(discord.ui.View):
-    def __init__(self, bot, guild_id: int, message_id: int):
+    def __init__(self, bot: Bot, guild_id: int, message_id: int):
         super().__init__(timeout=120)
         self.bot = bot
         self.guild_id = guild_id
@@ -20,7 +21,7 @@ class MinecraftPlayersView(discord.ui.View):
         button: discord.ui.Button
     ):
         # Получаем real_ip и query_port из БД
-        row = self.bot.db.minecraft_panel.get_real_ip_and_query_port(self.guild_id, self.message_id)
+        row = await self.bot.db.minecraft_panel.get_real_ip_and_query_port(self.guild_id, self.message_id)
 
 
         if not row:
@@ -180,7 +181,7 @@ async def get_server_info(ip: str, query_port: int | None = None):
 
 
 async def create_send_save_minecraft_panel(
-    bot,
+    bot: Bot,
     interaction: discord.Interaction,
     ip: str,
     port: int = 25565,
@@ -204,7 +205,7 @@ async def create_send_save_minecraft_panel(
     msg = await interaction.followup.send(embed=embed)
 
     # Сохраняем панель в БД
-    bot.db.minecraft_panel.save_minecraft_panel(
+    await bot.db.minecraft_panel.save_minecraft_panel(
         guild_id=interaction.guild_id,
         server_ip=ip,
         server_port=port,

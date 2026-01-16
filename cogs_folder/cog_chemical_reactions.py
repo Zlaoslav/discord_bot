@@ -1,3 +1,4 @@
+from bot import Bot
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -5,7 +6,7 @@ import services_folder.srv_chem_reactions as chem_reactions
 from services_folder.hlpr_logging import logger
 
 class chemical_reactions(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: Bot):
         self.bot = bot
 
     @app_commands.command(
@@ -76,5 +77,5 @@ class chemical_reactions(commands.Cog):
 
         return
 
-async def setup(bot: commands.Bot):
+async def setup(bot: Bot):
     await bot.add_cog(chemical_reactions(bot))

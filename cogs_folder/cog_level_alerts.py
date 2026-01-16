@@ -1,3 +1,4 @@
+from bot import Bot
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -6,7 +7,7 @@ from services_folder.hlpr_logging import logger
 
 
 class level_alerts(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: Bot):
         self.bot = bot
 
     @app_commands.command(
@@ -26,7 +27,7 @@ class level_alerts(commands.Cog):
             await interaction.response.send_message("У вас недостаточно прав для этой команды.", ephemeral=True)
             return
         try:
-            self.bot.db.level_alerts.save_level_alerts_channel(interaction.guild.id, channel.id if channel else None)
+            await self.bot.db.level_alerts.save_level_alerts_channel(interaction.guild.id, channel.id if channel else None)
             if channel:
                 await interaction.response.send_message(f"Канал для уведомлений о повышении уровня установлен: {channel.mention}", ephemeral=True)
             else:
@@ -37,6 +38,6 @@ class level_alerts(commands.Cog):
 
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: Bot):
     await bot.add_cog(level_alerts(bot))
 

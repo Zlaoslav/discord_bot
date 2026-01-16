@@ -1,3 +1,4 @@
+from bot import Bot
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -5,7 +6,7 @@ from services_folder.srv_level_rewards import try_set_level_reward
 
 
 class level_rewards(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: Bot):
         self.bot = bot
 
     @app_commands.command(
@@ -17,9 +18,9 @@ class level_rewards(commands.Cog):
         interaction: discord.Interaction,
         level: int
     ):
-        interaction.followup.send(try_set_level_reward(self.bot, interaction, level), ephemeral=True)
+        interaction.followup.send(await try_set_level_reward(self.bot, interaction, level), ephemeral=True)
 
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: Bot):
     await bot.add_cog(level_rewards(bot))

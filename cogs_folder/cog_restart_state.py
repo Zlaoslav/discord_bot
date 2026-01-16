@@ -1,3 +1,4 @@
+from bot import Bot
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -8,7 +9,7 @@ import os
 from typing import Optional
 
 class restart_state(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: Bot):
         self.bot = bot
 
     @commands.command(name="shutdownbot")
@@ -66,6 +67,6 @@ class restart_state(commands.Cog):
 
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: Bot):
     await bot.add_cog(restart_state(bot))
     

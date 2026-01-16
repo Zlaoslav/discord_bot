@@ -1,3 +1,4 @@
+from bot import Bot
 import discord
 import asyncio
 import sys
@@ -5,7 +6,7 @@ import os
 from services_folder.hlpr_logging import logger
 from configs_folder.advanced_settings import OWNER_ID
 
-async def notify_after_restart(bot):
+async def notify_after_restart(bot: Bot):
     # вызывается из on_ready после того как бот залогинился
     channel_id = await bot.db.restart_state.pop_restart_channel()
     if not channel_id:
@@ -35,7 +36,7 @@ async def notify_after_restart(bot):
     except Exception as e:
         logger.warning(f"Ошибка при отправке уведомления о рестарте: {e}")
 
-async def restart_process(bot, interaction_or_ctx=None):
+async def restart_process(bot: Bot, interaction_or_ctx=None):
     """
     Сохраняет канал (если interaction_or_ctx передан), отвечает пользователю и перезапускает процесс.
     Если передан interaction (slash) — отправляет response, если ctx (prefix) — использует ctx.send.
@@ -81,7 +82,7 @@ async def restart_process(bot, interaction_or_ctx=None):
     os._exit(0)
 
 
-async def quickrestart_process(bot, interaction_or_ctx=None):
+async def quickrestart_process(bot: Bot, interaction_or_ctx=None):
     """
     Быстрый перезапуск без обновления файлов.
     Сохраняет канал (если interaction_or_ctx передан), отвечает пользователю и перезапускает процесс.

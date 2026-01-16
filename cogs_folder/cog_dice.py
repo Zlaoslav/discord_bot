@@ -1,3 +1,4 @@
+from bot import Bot
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -5,7 +6,7 @@ from discord import app_commands
 import random
 
 class dice(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: Bot):
         self.bot = bot
 
     @app_commands.command(
@@ -56,5 +57,5 @@ class dice(commands.Cog):
             await interaction.response.send_message("Ошибка, недопустимые числа!", ephemeral=True)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: Bot):
     await bot.add_cog(dice(bot))

@@ -1,3 +1,4 @@
+from bot import Bot
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -11,7 +12,7 @@ def format_duration(seconds: int) -> str:
     m, s = divmod(seconds, 60)
     return "".join(f"{x}{y}" for x, y in [(d,"d"),(h,"h"),(m,"m"),(s,"s")] if x)
 class level_xp(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: Bot):
         self.bot = bot
 
 
@@ -35,12 +36,12 @@ class level_xp(commands.Cog):
         guild_id = interaction.guild.id
         user_id = member.id
 
-        level = xp_to_level(self.bot, guild_id, user_id)
-        xp_left = xp_left_to_next_level(self.bot, guild_id, user_id)
-        voice_time = format_duration(self.bot.db.level_users.get_voice_time(guild_id, user_id))
+        level = await xp_to_level(self.bot, guild_id, user_id)
+        xp_left = await xp_left_to_next_level(self.bot, guild_id, user_id)
+        voice_time = format_duration(await self.bot.db.level_users.get_voice_time(guild_id, user_id))
         if voice_time == "" or voice_time == None:
             voice_time = "-"
-        xp = self.bot.db.level_users.get_xp(guild_id, user_id)
+        xp = await self.bot.db.level_users.get_xp(guild_id, user_id)
 
         embed = discord.Embed(
             title=member.display_name,
@@ -100,7 +101,7 @@ class level_xp(commands.Cog):
         if member.bot:
             return  # реакция от бота, игнорируем
         
-        try_give_xp(payload.guild_id, payload.user_id)
+        await try_give_xp(payload.guild_id, payload.user_id)
 
 
     @commands.Cog.listener()
@@ -112,9 +113,9 @@ class level_xp(commands.Cog):
         if user.bot:
             return
 
-        try_give_xp(self.bot, user.id)
+        await try_give_xp(self.bot, user.id)
 
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: Bot):
     await bot.add_cog(level_xp(bot))

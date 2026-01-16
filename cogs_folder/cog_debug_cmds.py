@@ -1,3 +1,4 @@
+from bot import Bot
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -5,7 +6,7 @@ import services_folder.hlpr_perms_manager as perms_manager
 from services_folder.hlpr_logging import logger
 
 class debug_cmds(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: Bot):
         self.bot = bot
 
     @app_commands.command(
@@ -213,5 +214,5 @@ class debug_cmds(commands.Cog):
         await interaction.response.send_message(f"**Права бота:**\n```{text}```", ephemeral=True)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: Bot):
     await bot.add_cog(debug_cmds(bot))

@@ -1,10 +1,11 @@
+from bot import Bot
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
 from services_folder.srv_minecraft_panel import create_send_save_minecraft_panel, create_minecraft_panel
 
 class minecraft_panel(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: Bot):
         self.bot = bot
 
     @app_commands.command(
@@ -52,7 +53,7 @@ class minecraft_panel(commands.Cog):
                 await message.edit(embed=embed)
 
             except discord.NotFound:
-                self.bot.db.minecraft_panel.delete_panel(message_id)
+                await self.bot.db.minecraft_panel.delete_panel(message_id)
                 print(f"[PANEL REMOVE] {ip}:{port} — сообщение удалено")
 
             except discord.Forbidden:
@@ -62,5 +63,5 @@ class minecraft_panel(commands.Cog):
                 print(f"[PANEL ERROR] {ip}:{port}: {e}")
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: Bot):
     await bot.add_cog(minecraft_panel(bot))

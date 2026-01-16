@@ -1,3 +1,4 @@
+from bot import Bot
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -6,7 +7,7 @@ import random
 import re
 
 class sus_messages(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: Bot):
         self.bot = bot
 
     @commands.Cog.listener()
@@ -70,5 +71,5 @@ class sus_messages(commands.Cog):
                     )
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: Bot):
     await bot.add_cog(sus_messages(bot))

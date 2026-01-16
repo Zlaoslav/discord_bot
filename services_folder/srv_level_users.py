@@ -1,3 +1,4 @@
+from bot import Bot
 from discord import Interaction as Type_Interaction
 from services_folder.hlpr_logging import logger
 import services_folder.hlpr_perms_manager as hlpr_perms_manager
@@ -12,10 +13,10 @@ import threading
 user_level_last_calls = {}
 user_level_lock = threading.Lock()
 
-def xp_to_level(bot, guild_id: int, user_id: int) -> int:
+async def xp_to_level(bot: Bot, guild_id: int, user_id: int) -> int:
     """Конвертация опыта в уровень по формуле"""
 
-    xp = bot.db.level_users.get_xp(guild_id, user_id)
+    xp = await bot.db.level_users.get_xp(guild_id, user_id)
     level = 0
 
     while True:
@@ -27,14 +28,14 @@ def xp_to_level(bot, guild_id: int, user_id: int) -> int:
     return level
 
 
-def xp_left_to_next_level(bot, guild_id: int, user_id: int) -> int:
+async def xp_left_to_next_level(bot: Bot, guild_id: int, user_id: int) -> int:
     """
     Возвращает количество опыта, которое осталось до следующего уровня.
     Если достигнут MAX_LEVEL — возвращает 0.
     """
 
-    xp = bot.db.level_users.get_xp(guild_id, user_id)
-    level = xp_to_level(bot, guild_id, user_id)
+    xp = await bot.db.level_users.get_xp(guild_id, user_id)
+    level = await xp_to_level(bot, guild_id, user_id)
 
     if level >= MAX_LEVEL:
         return 0
@@ -45,14 +46,14 @@ def xp_left_to_next_level(bot, guild_id: int, user_id: int) -> int:
     return max(0, next_level_xp - xp)
 
 
-async def on_xp_added(bot, guild_id: int, user_id: int):
+async def on_xp_added(bot: Bot, guild_id: int, user_id: int):
     try:
-        new_level = xp_to_level(bot, guild_id, user_id)
-        old_level = bot.db.level_users.get_user_level(guild_id, user_id)
+        new_level = await xp_to_level(bot, guild_id, user_id)
+        old_level = await bot.db.level_users.get_user_level(guild_id, user_id)
 
         # если уровень изменился — сохраняем
         if new_level != old_level:
-            bot.db.level_users.set_user_level(guild_id, user_id, new_level)
+            await bot.db.level_users.set_user_level(guild_id, user_id, new_level)
 
         guild = bot.get_guild(guild_id)
         if not guild:
@@ -62,7 +63,7 @@ async def on_xp_added(bot, guild_id: int, user_id: int):
         if not member:
             return
 
-        rewards = bot.db.level_rewards.get_rewards(guild_id)  # список кортежей (уровень, role_id)
+        rewards = await bot.db.level_rewards.get_rewards(guild_id)  # список кортежей (уровень, role_id)
         # Сортируем по уровню, чтобы найти максимальный подходящий
         rewards_sorted = sorted(rewards, key=lambda x: x[0])
 
@@ -98,7 +99,7 @@ async def on_xp_added(bot, guild_id: int, user_id: int):
 
         # уведомление о повышении уровня
         if new_level > old_level:
-            ch_id = bot.db.level_alerts.get_level_alerts_channel(guild_id)
+            ch_id = await bot.db.level_alerts.get_level_alerts_channel(guild_id)
             if not ch_id:
                 return
 
@@ -131,14 +132,15 @@ def can_call(guild_id: int, user_id: int) -> bool:
         user_level_last_calls[key] = now
         return True
 
-def try_give_xp(bot,
+async def try_give_xp(
+    bot: Bot,
     guild_id: int,
     user_id: int
     ):
     if not can_call(guild_id, user_id):
         return
 
-    bot.db.level_users.add_xp(guild_id, user_id, random.randint(5, 10))
+    await bot.db.level_users.add_xp(guild_id, user_id, random.randint(5, 10))
     # Проверяем асинхронно, повысился ли уровень и отправляем уведомление если нужно
     try:
         asyncio.create_task(on_xp_added(bot, guild_id, user_id))

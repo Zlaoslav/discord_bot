@@ -1,3 +1,4 @@
+from bot import Bot
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -18,7 +19,7 @@ def format_duration(seconds: int) -> str:
     return "".join(f"{x}{y}" for x, y in [(d,"d"),(h,"h"),(m,"m"),(s,"s")] if x)
 
 class other_prefix_cmds(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: Bot):
         self.bot = bot
         try:
             self.bot.remove_command('help')
@@ -73,5 +74,5 @@ class other_prefix_cmds(commands.Cog):
             await ctx.send("⚠ Синхронизация прошла, но вернулось 0 команд.")
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: Bot):
     await bot.add_cog(other_prefix_cmds(bot))

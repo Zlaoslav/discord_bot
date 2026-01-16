@@ -1,3 +1,4 @@
+from bot import Bot
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -5,7 +6,7 @@ import services_folder.hlpr_perms_manager as perms_manager
 
 
 class custom_perms(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: Bot):
         self.bot = bot
 
     @app_commands.command(
@@ -105,5 +106,5 @@ class custom_perms(commands.Cog):
         await interaction.response.send_message(f"Выберите роль для {'установки' if set else 'удаления'} пользователю {member.mention}:", view=view, ephemeral=True)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: Bot):
     await bot.add_cog(custom_perms(bot))

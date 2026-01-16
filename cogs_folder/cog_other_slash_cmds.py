@@ -1,3 +1,4 @@
+from bot import Bot
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -7,7 +8,7 @@ from configs_folder.advanced_settings import BOT_COMMANDS_LIST
 from services_folder.hlpr_send_long import _send_long_followup
 
 class other_slash_cmds(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: Bot):
         self.bot = bot
 
     @app_commands.command(
@@ -131,5 +132,5 @@ class other_slash_cmds(commands.Cog):
             logger.error(e)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: Bot):
     await bot.add_cog(other_slash_cmds(bot))
