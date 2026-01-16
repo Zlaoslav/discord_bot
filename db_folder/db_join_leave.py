@@ -31,7 +31,7 @@ class JoinLeaveRepository:
                 FROM {self.__TABLE}
                 WHERE guild_id = ?
             """,
-            (guild_id)
+            (guild_id,)
         )
         row = await cursor.fetchone()
         channel_id = row[0] if row else None

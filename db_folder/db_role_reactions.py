@@ -67,7 +67,7 @@ class RoleReactionsRepository:
                 FROM {self.__TABLE}
                 WHERE message_id = ?
             """,
-            (message_id)
+            (message_id,)
         )
 
         rows = await cursor.fetchall()
@@ -83,7 +83,7 @@ class RoleReactionsRepository:
             f"""
                 DELETE FROM {self.__TABLE}
                 WHERE message_id = ?
-            """, (message_id)
+            """, (message_id,)
         )
 
         await self.db.commit()

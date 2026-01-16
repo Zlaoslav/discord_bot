@@ -37,7 +37,7 @@ class LevelAlertsRepository:
                 FROM level_alerts
                 WHERE guild_id = ?
             """,
-            (guild_id)
+            (guild_id,)
         )
 
         row = await cursor.fetchone()

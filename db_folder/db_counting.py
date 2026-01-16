@@ -44,7 +44,7 @@ class CountingRepository:
                 SET channel_id = NULL
                 WHERE guild_id = ?
             """,
-            (guild_id)
+            (guild_id,)
         )
 
         await self.db.commit()
@@ -64,7 +64,7 @@ class CountingRepository:
                 FROM {self.__TABLE}
                 WHERE guild_id = ?
             """,
-            (guild_id)
+            (guild_id,)
         )
         row = await cursor.fetchone()
 
@@ -88,7 +88,7 @@ class CountingRepository:
             SET next_expected = next_expected + 1
             WHERE id = ?
             """,
-            (guild_id)
+            (guild_id,)
         )
         
         await self.db.commit()
