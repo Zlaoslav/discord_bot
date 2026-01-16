@@ -1,85 +1,146 @@
 import aiosqlite
+from services_folder.hlpr_logging import logger
+from mcstatus import JavaServer
+
 class MinecraftPanelRepository:
     __TABLE = "minecraft_panels"
 
     def __init__(self, db: aiosqlite.Connection):
         self.db = db
 
-    async def save_minecraft_panel(
+    async def add_minecraft_panel(
         self,
         guild_id: int,
         server_ip: str,
+        real_ip: str,
         server_port: int,
         query_port: int | None,
         channel_id: int,
         message_id: int
-    ) -> None:
+    ):
         await self.db.execute(
             f"""
-            INSERT INTO {self.__TABLE} 
-            (guild_id, server_ip, server_port, query_port, channel_id, message_id)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(guild_id, server_ip, server_port)
-            DO UPDATE SET
-                query_port = excluded.query_port,
-                channel_id = excluded.channel_id,
-                message_id = excluded.message_id
+                INSERT OR REPLACE INTO {self.__TABLE}
+                (guild_id, server_ip, real_ip, server_port, query_port, channel_id, message_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (guild_id, server_ip, server_port, query_port, channel_id, message_id)
+            (
+                guild_id,
+                server_ip,
+                real_ip,
+                server_port,
+                query_port,
+                channel_id,
+                message_id
+            )
         )
-        await self.db.commit()
-        print(f"[PANEL ADD] {server_ip}:{server_port} (query={query_port}) → guild {guild_id}, channel {channel_id}")
 
-    async def get_panel(
+        await self.db.commit()
+        logger.info(f"[PANEL ADD] {server_ip} (real {real_ip}:{server_port}) → guild {guild_id}, channel {channel_id}")
+        return True
+
+
+
+    async def get_panel_by_message_id(
         self,
         guild_id: int,
-        server_ip: str,
-        server_port: int
-    ) -> tuple | None:
+        message_id: int
+    ):
+
         cursor = await self.db.execute(
             f"""
-            SELECT guild_id, server_ip, server_port, query_port, channel_id, message_id
-            FROM {self.__TABLE}
-            WHERE guild_id = ? AND server_ip = ? AND server_port = ?
+                SELECT real_ip, server_port
+                FROM {self.__TABLE}
+                WHERE guild_id = ? AND message_id = ?
             """,
-            (guild_id, server_ip, server_port)
+            (
+                guild_id,
+                message_id
+            )
         )
-        return await cursor.fetchone()
+        row = await cursor.fetchone()
+        if row:
+            return {"real_ip": row[0], "server_port": row[1]}
+        return None
 
-    async def delete_panel(
+
+    async def delete_minecraft_panel(
         self,
-        guild_id: int,
-        server_ip: str,
-        server_port: int
-    ) -> None:
+        message_id: int
+    ):
+
         await self.db.execute(
             f"""
-            DELETE FROM {self.__TABLE}
-            WHERE guild_id = ? AND server_ip = ? AND server_port = ?
+                DELETE FROM {self.__TABLE}
+                WHERE message_id = ?
             """,
-            (guild_id, server_ip, server_port)
+            (
+                message_id,
+            )
         )
         await self.db.commit()
-        print(f"[PANEL DELETE] {server_ip}:{server_port} → guild {guild_id}")
+        return True
+
+
+
+    async def get_server_info(ip: str, query_port: int | None = None):
+        """
+        Возвращает информацию о сервере Minecraft:
+        - статус онлайн/офлайн
+        - игроков онлайн / макс
+        - список игроков (через query, если query_port задан)
+        - иконка
+        - источник данных ("ping" или "query")
+        """
+
+        # создаём объект для ping/status
+        try:
+            server = JavaServer.lookup(ip)
+            status = server.status()
+            logger.info(f"[DEBUG] Статус сервера {ip}: онлайн={status.players.online}/{status.players.max}")
+        except Exception as e:
+            logger.error(f"[DEBUG] Сервер офлайн или ошибка: {e}")
+            return {
+                "online": False,
+                "players_online": 0,
+                "players_max": 0,
+                "players": [],
+                "icon": None,
+                "source": "offline"
+            }
+
+        # по умолчанию список игроков пуст, источник ping
+        players = []
+        source = "ping"
+
+        # query — только для кнопки игроков
+        if query_port:
+            try:
+                query_server = JavaServer.lookup(f"{ip}:{query_port}")
+                query = query_server.query()
+                logger.info(f"[DEBUG] Query сработал, игроки: {query.players.names}")
+                if query.players.names:
+                    players = query.players.names
+                    source = "query"
+            except Exception as e:
+                logger.warning(f"[DEBUG] Query не сработал: {e}")
+
+        return {
+            "online": True,
+            "players_online": status.players.online,
+            "players_max": status.players.max,
+            "players": players,
+            "icon": status.icon,
+            "source": source
+       }
     
-    async def get_minecraft_panels(self):
+    async def get_all_panels(self):
         cursor = await self.db.execute(
             f"""
                 SELECT guild_id, server_ip, real_ip, server_port, query_port, channel_id, message_id
                 FROM {self.__TABLE}
             """
         )
+
         panels = await cursor.fetchall()
         return panels
-
-    async def get_real_ip_and_query_port(self, guild_id, message_id):
-        cursor = await self.db.execute(
-            f"""
-                SELECT real_ip, query_port
-                FROM {self.__TABLE}
-                WHERE guild_id = ? AND message_id = ?
-            """, 
-            (guild_id, message_id)
-        )
-        row = await cursor.fetchone()
-        return row

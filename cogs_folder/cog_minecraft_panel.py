@@ -3,6 +3,8 @@ import discord
 from discord.ext import commands, tasks
 from discord import app_commands
 from services_folder.srv_minecraft_panel import create_send_save_minecraft_panel, create_minecraft_panel
+import services_folder.hlpr_perms_manager as perms_manager
+from services_folder.hlpr_logging import logger
 
 class minecraft_panel(commands.Cog):
     def __init__(self, bot: Bot):
@@ -16,18 +18,49 @@ class minecraft_panel(commands.Cog):
         self,
         interaction: discord.Interaction,
         ip: str,
-        port: int,
+        real_ip: str | None = None,
+        port: int = 25565,
         query_port: int | None = None
     ):
-        await interaction.response.defer()
+        # Проверка прав
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
+            await interaction.response.send_message("❌ У вас недостаточно прав.", ephemeral=True)
+            return
 
-        await create_send_save_minecraft_panel(
-            self.bot,
-            interaction=interaction,
-            ip=ip,
-            port=port,
-            query_port=query_port
+        await interaction.response.defer(ephemeral=True)  # отвечаем только пользователю
+
+        if real_ip is None:
+            real_ip = ip  # если реальный IP не указан, берем ip сервера
+
+        embed, view = await create_minecraft_panel(ip, real_ip, port, query_port)
+
+        # Отправляем панель **в канал**, но не как ответ на команду
+        channel = interaction.channel
+        msg = await channel.send(embed=embed, view=view)
+
+        # Проставляем guild_id и message_id для кнопки
+        view.guild_id = interaction.guild_id
+        view.message_id = msg.id
+
+        # Сохраняем в базу (новая структура)
+        await self.bot.db.minecraft_panel.add_minecraft_panel(
+            guild_id=interaction.guild_id,
+            server_ip=ip,
+            real_ip=real_ip,
+            server_port=port,
+            query_port=query_port,
+            channel_id=channel.id,
+            message_id=msg.id
         )
+
+        # Если таск обновления не запущен — запускаем
+        if not self.update_panels_task.is_running():
+            self.pdate_panels_task.start()
+
+        # Отправляем пользователю ephemeral-сообщение о успехе
+        await interaction.followup.send("✅ Панель успешно отправлена!", ephemeral=True)
+
+
         
     @commands.Cog.listener()
     async def on_ready(self):
@@ -36,9 +69,13 @@ class minecraft_panel(commands.Cog):
 
     @tasks.loop(seconds=30)
     async def update_panels_task(self):
-        panels = await self.bot.db.minecraft_panel.get_minecraft_panels()
+        """
+        Обновляет все панели в Discord каждые 30 секунд.
+        Использует новую базу minecraft_panels_v3 с real_ip.
+        """
+        panels = await self.bot.db.minecraft_panel.get_all_panels()
 
-        for guild_id, ip, port, query_port, channel_id, message_id in panels:
+        for guild_id, server_ip, real_ip, port, query_port, channel_id, message_id in panels:
             guild = self.bot.get_guild(guild_id)
             if not guild:
                 continue
@@ -49,18 +86,25 @@ class minecraft_panel(commands.Cog):
 
             try:
                 message = await channel.fetch_message(message_id)
-                embed, view = await create_minecraft_panel(ip, port, query_port)
-                await message.edit(embed=embed)
+                embed, view = await create_minecraft_panel(server_ip, real_ip, port, query_port)
+
+                # Обновляем guild_id и message_id в кнопке
+                for child in view.children:
+                    if isinstance(child, discord.ui.Button):
+                        view.guild_id = guild_id
+                        view.message_id = message_id
+
+                await message.edit(embed=embed, view=view)
 
             except discord.NotFound:
-                await self.bot.db.minecraft_panel.delete_panel(message_id)
-                print(f"[PANEL REMOVE] {ip}:{port} — сообщение удалено")
+                self.bot.db.minecraft_panel.delete_minecraft_panel(message_id)
+                logger.info(f"[PANEL REMOVE] {server_ip}:{port} — сообщение удалено")
 
             except discord.Forbidden:
-                print(f"[PANEL ERROR] {ip}:{port} — нет прав")
+                logger.warning(f"[PANEL ERROR] {server_ip}:{port} — нет прав")
 
             except Exception as e:
-                print(f"[PANEL ERROR] {ip}:{port}: {e}")
+                logger.error(f"[PANEL ERROR] {server_ip}:{port} → {e}")
 
 
 async def setup(bot: Bot):
