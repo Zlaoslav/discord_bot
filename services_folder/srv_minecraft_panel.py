@@ -184,6 +184,7 @@ async def create_send_save_minecraft_panel(
     bot: Bot,
     interaction: discord.Interaction,
     ip: str,
+    real_ip: str | None = None,
     port: int = 25565,
     query_port: int | None = None
 ):
@@ -205,9 +206,10 @@ async def create_send_save_minecraft_panel(
     msg = await interaction.followup.send(embed=embed)
 
     # Сохраняем панель в БД
-    await bot.db.minecraft_panel.save_minecraft_panel(
+    await bot.db.minecraft_panel.add_minecraft_panel(
         guild_id=interaction.guild_id,
         server_ip=ip,
+        real_ip=real_ip,
         server_port=port,
         query_port=query_port,
         channel_id=interaction.channel_id,

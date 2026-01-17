@@ -32,7 +32,7 @@ class minecraft_panel(commands.Cog):
         if real_ip is None:
             real_ip = ip  # если реальный IP не указан, берем ip сервера
 
-        embed, view = await create_minecraft_panel(ip, real_ip, port, query_port)
+        embed, view = await create_send_save_minecraft_panel(self.bot, interaction, ip, real_ip, port, query_port)
 
         # Отправляем панель **в канал**, но не как ответ на команду
         channel = interaction.channel
