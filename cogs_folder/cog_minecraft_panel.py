@@ -85,7 +85,7 @@ class minecraft_panel(commands.Cog):
 
             try:
                 message = await channel.fetch_message(message_id)
-                embed, view = await create_minecraft_panel(server_ip, real_ip, port, query_port)
+                embed, view = await create_minecraft_panel(server_ip, real_ip, port, query_port, self.bot, guild_id, message_id)
 
                 # Обновляем guild_id и message_id в кнопке
                 for child in view.children:
