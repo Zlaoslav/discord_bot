@@ -188,7 +188,6 @@ async def create_send_save_minecraft_panel(
     port: int = 25565,
     query_port: int | None = None
 ):
-    # Получаем данные ТОЛЬКО для embed
     data = await get_server_info(ip, query_port=query_port)
 
     embed = discord.Embed(
@@ -202,77 +201,25 @@ async def create_send_save_minecraft_panel(
         inline=True
     )
 
-    # Отправляем сообщение БЕЗ view (message_id ещё неизвестен)
-    msg = await interaction.followup.send(embed=embed)
-
-    # Сохраняем панель в БД
-    await bot.db.minecraft_panel.add_minecraft_panel(
-        guild_id=interaction.guild_id,
-        server_ip=ip,
-        real_ip=real_ip,
-        server_port=port,
-        query_port=query_port,
-        channel_id=interaction.channel_id,
-        message_id=msg.id
-    )
-
-    # Теперь можем создать view с guild_id + message_id
     view = MinecraftPlayersView(
         bot=bot,
         guild_id=interaction.guild_id,
-        message_id=msg.id
+        message_id=0  # временно, обновится после send
     )
 
-    # Обновляем сообщение, добавляя кнопку
-    await msg.edit(view=view)
-
-    return None
+    return embed, view
 
 
 async def create_minecraft_panel(
     ip: str,
-    real_ip: str | None = None,
-    port: int = 25565,
-    query_port: int | None = None
+    real_ip: str | None,
+    port: int,
+    query_port: int | None,
+    bot: Bot,
+    guild_id: int,
+    message_id: int
 ):
-    """
-    Создает embed для панели сервера Minecraft.
-    View создаётся ТОЛЬКО после отправки сообщения (когда известен message_id).
-    """
-
-    from mcstatus import JavaServer
-
-    data = None
-
-    # Пытаемся получить данные через get_server_info
-    try:
-        try:
-            data = await get_server_info(ip, query_port=query_port, real_ip=real_ip)
-        except TypeError:
-            data = await get_server_info(ip, query_port=query_port)
-    except Exception as e:
-        logger.warning(f"[GET INFO ERROR] {ip}:{port} → {e}")
-
-    # Fallback на mcstatus
-    if not data:
-        online = False
-        players_online = 0
-        players_max = 0
-
-        try:
-            server = JavaServer.lookup(ip)
-            status = server.status()
-            online = True
-            players_online = status.players.online
-            players_max = status.players.max
-        except Exception as e:
-            logger.warning(f"[STATUS ERROR] {ip}:{port} → {e}")
-
-        data = {
-            "online": online,
-            "players_online": players_online,
-            "players_max": players_max
-        }
+    data = await get_server_info(ip, query_port=query_port)
 
     embed = discord.Embed(
         title=f"{'🟩' if data['online'] else '🟥'} {ip}:{port}",
@@ -285,4 +232,10 @@ async def create_minecraft_panel(
         inline=True
     )
 
-    return embed, None
+    view = MinecraftPlayersView(
+        bot=bot,
+        guild_id=guild_id,
+        message_id=message_id
+    )
+
+    return embed, view

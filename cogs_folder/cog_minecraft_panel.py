@@ -31,31 +31,30 @@ class minecraft_panel(commands.Cog):
 
         if real_ip is None:
             real_ip = ip  # если реальный IP не указан, берем ip сервера
+    
+        embed, view = await create_send_save_minecraft_panel(
+            self.bot, interaction, ip, real_ip, port, query_port
+        )
 
-        embed, view = await create_send_save_minecraft_panel(self.bot, interaction, ip, real_ip, port, query_port)
+        msg = await interaction.channel.send(embed=embed, view=view)
 
-        # Отправляем панель **в канал**, но не как ответ на команду
-        channel = interaction.channel
-        msg = await channel.send(embed=embed, view=view)
-
-        # Проставляем guild_id и message_id для кнопки
         view.guild_id = interaction.guild_id
         view.message_id = msg.id
 
-        # Сохраняем в базу (новая структура)
         await self.bot.db.minecraft_panel.add_minecraft_panel(
             guild_id=interaction.guild_id,
             server_ip=ip,
             real_ip=real_ip,
             server_port=port,
             query_port=query_port,
-            channel_id=channel.id,
+            channel_id=interaction.channel.id,
             message_id=msg.id
         )
 
+
         # Если таск обновления не запущен — запускаем
         if not self.update_panels_task.is_running():
-            self.pdate_panels_task.start()
+            self.update_panels_task.start()
 
         # Отправляем пользователю ephemeral-сообщение о успехе
         await interaction.followup.send("✅ Панель успешно отправлена!", ephemeral=True)
