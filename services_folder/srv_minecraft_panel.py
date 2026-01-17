@@ -21,7 +21,7 @@ class MinecraftPlayersView(discord.ui.View):
         button: discord.ui.Button
     ):
         # Получаем real_ip и query_port из БД
-        row = await self.bot.db.minecraft_panel.get_real_ip_and_query_port(self.guild_id, self.message_id)
+        row = await self.bot.db.minecraft_panel.get_panel_by_message_id(self.guild_id, self.message_id)
 
 
         if not row:

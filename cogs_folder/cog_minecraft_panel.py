@@ -96,7 +96,7 @@ class minecraft_panel(commands.Cog):
                 await message.edit(embed=embed, view=view)
 
             except discord.NotFound:
-                self.bot.db.minecraft_panel.delete_minecraft_panel(message_id)
+                await self.bot.db.minecraft_panel.delete_minecraft_panel(int(message_id))
                 logger.info(f"[PANEL REMOVE] {server_ip}:{port} — сообщение удалено")
 
             except discord.Forbidden:
