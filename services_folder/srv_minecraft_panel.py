@@ -7,6 +7,7 @@ import aiohttp
 import re
 import json
 
+
 class MinecraftPlayersView(discord.ui.View):
     def __init__(self, bot: Bot, guild_id: int, message_id: int):
         super().__init__(timeout=120)
@@ -15,118 +16,72 @@ class MinecraftPlayersView(discord.ui.View):
         self.message_id = message_id
 
     @discord.ui.button(label="👥 Показать игроков", style=discord.ButtonStyle.primary)
-    async def show_players(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
-        # Получаем real_ip и query_port из БД
+    async def show_players(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Берем real_ip и query_port из базы
+
+
         row = await self.bot.db.minecraft_panel.get_panel_by_message_id(self.guild_id, self.message_id)
 
-
         if not row:
-            await interaction.response.send_message(
-                "⚠️ Панель не найдена в базе. (это ошибка, сообщите об этом администратору бота)",
-                ephemeral=True
-            )
+            await interaction.response.send_message("❌ Панель не найдена в базе.", ephemeral=True)
             return
 
-        real_ip = row[0]
-        query_port = row[1]
+        real_ip, query_port = row
 
         if not query_port:
-            await interaction.response.send_message(
-                "❌ Query порт не указан для этой панели.",
-                ephemeral=True
-            )
+            await interaction.response.send_message("❌ Query порт не указан для этой панели.", ephemeral=True)
             return
 
         url = f"http://{real_ip}:{query_port}/info"
 
         await interaction.response.defer(ephemeral=True)
-        temp_msg = await interaction.followup.send(
-            "⏳ Получаем информацию о игроках...",
-            ephemeral=True
-        )
+        temp_msg = await interaction.followup.send("⏳ Получаем информацию о игроках...", ephemeral=True)
 
-        # --- HTTP запрос и парсинг игроков ---
-        players: list[str] = []
-
+        players = []
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=10) as resp:
                     text = await resp.text()
 
-                    # Исправление кривого JSON с players без кавычек
+                    # Попытка исправить некорректные имена игроков в массиве players
                     def fix_players_json(text: str) -> str:
                         pattern = r'("players"\s*:\s*)\[(.*?)\]'
                         match = re.search(pattern, text, re.DOTALL)
-                        if not match:
-                            return text
-
-                        prefix = match.group(1)
-                        content = match.group(2).strip()
-
-                        if not content:
-                            fixed = prefix + "[]"
-                        else:
-                            names = [
-                                f'"{name.strip()}"'
-                                for name in content.split(",")
-                                if name.strip()
-                            ]
-                            fixed = prefix + "[" + ",".join(names) + "]"
-
-                        return re.sub(pattern, fixed, text, flags=re.DOTALL)
+                        if match:
+                            prefix = match.group(1)
+                            content = match.group(2).strip()
+                            if content:
+                                # Разделяем по запятым и добавляем кавычки
+                                names = [f'"{name.strip()}"' for name in content.split(",")]
+                                fixed = prefix + "[" + ",".join(names) + "]"
+                                text = re.sub(pattern, fixed, text, flags=re.DOTALL)
+                            else:
+                                # пустой массив
+                                fixed = prefix + "[]"
+                                text = re.sub(pattern, fixed, text, flags=re.DOTALL)
+                        return text
 
                     fixed_text = fix_players_json(text)
 
                     try:
                         data = json.loads(fixed_text)
                         players = data.get("players", [])
-                    except Exception as e:
-                        logger.warning(
-                            f"[HTTP ERROR] Некорректный JSON после исправления "
-                            f"{url}: {e}\nОтвет: {fixed_text}"
-                        )
-                        await temp_msg.edit(
-                            content="❌ Сервер вернул некорректные данные."
-                        )
+                    except Exception as e_json:
+                        logger.warning(f"[HTTP ERROR] Некорректный JSON после исправления с {url}: {e_json}\nТекст ответа: {fixed_text}")
+                        await temp_msg.edit(content="❌ Сервер вернул некорректные данные даже после исправления JSON.")
                         return
 
         except Exception as e:
             logger.warning(f"[HTTP ERROR] {url} → {e}")
-            await temp_msg.edit(
-                content="❌ Не удалось получить информацию с сервера."
-            )
+            await temp_msg.edit(content="❌ Не удалось получить информацию с сервера (таймаут или оффлайн).")
             return
 
-        # --- Формирование ответа ---
         if not players:
-            await temp_msg.edit(
-                content="❌ Игроки не онлайн или список пуст."
-            )
-            return
+            text = "❌ Игроки не онлайн или список пуст."
+        else:
+            text = "👥 Игроки онлайн:\n" + "\n".join(f"• {p}" for p in players)
 
-        header = f"👥 **Игроки онлайн:** {len(players)}\n\n"
-
-        chunks = []
-        current = header
-
-        for name in players:
-            line = f"• {name}\n"
-            if len(current) + len(line) > 1900:
-                chunks.append(current)
-                current = ""
-            current += line
-
-        if current:
-            chunks.append(current)
-
-        await temp_msg.edit(content=chunks[0])
-        for chunk in chunks[1:]:
-            await interaction.followup.send(chunk, ephemeral=True)
-
+        await temp_msg.edit(content=text)
 
 async def get_server_info(ip: str, query_port: int | None = None):
     """
