@@ -31,7 +31,8 @@ class MinecraftPlayersView(discord.ui.View):
             )
             return
 
-        real_ip, query_port = row
+        real_ip = row[0]
+        query_port = row[1]
 
         if not query_port:
             await interaction.response.send_message(
