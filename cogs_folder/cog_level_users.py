@@ -101,19 +101,7 @@ class level_xp(commands.Cog):
         if member.bot:
             return  # реакция от бота, игнорируем
         
-        await try_give_xp(payload.guild_id, payload.user_id)
-
-
-    @commands.Cog.listener()
-    async def on_reaction_add(
-        self,
-        reaction: discord.Reaction,
-        user: discord.User
-        ):
-        if user.bot:
-            return
-
-        await try_give_xp(self.bot, user.id)
+        await try_give_xp(self.bot, payload.guild_id, payload.user_id)
 
 
 
