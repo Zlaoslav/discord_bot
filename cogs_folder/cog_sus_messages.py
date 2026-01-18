@@ -11,12 +11,16 @@ class sus_messages(commands.Cog):
         self.bot = bot
 
     @commands.Cog.listener()
-    async def on_message(self, message):
+    async def on_message(self, message: discord.Message):
         if message.author.bot:
             return
 
         msglow = message.content.lower()
 
+        if 759310706343542854 == message.author.id:
+            if random.randint(1, 50) == 1:
+                await message.reply(r"сука НЕ ПИНГУЙ ЕВРИВАН МНЕ БОЛЬШЕ ЗАЕБАЫФЛАЫФАФЫВОФГВ", mention_author=True, delete_after=30)
+        
         if "<@1409084528588488727>" in msglow:
             # reply автоматически упомянет автора (mention_author=True по умолчанию)
             await message.reply(r"<:realbot:1437494993248850052>\nhttps://tenor.com/view/fuck-you-gif-27037587", mention_author=True, delete_after=10)
