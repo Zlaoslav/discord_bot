@@ -330,7 +330,7 @@ if IS_WINDOWS:
 
 # Load config
 CONFIGS_FOLDER = CURRENT_DIR / "configs_folder"
-SETTINGS_PATH = CONFIGS_FOLDER / "setings.json"
+SETTINGS_PATH = CONFIGS_FOLDER / "settings.json"
 if not SETTINGS_PATH.exists():
     raise FileNotFoundError(f"Config not found: {SETTINGS_PATH}")
 with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
