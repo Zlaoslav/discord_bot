@@ -60,7 +60,7 @@ class MinecraftPanelRepository:
         )
         row = await cursor.fetchone()
         if row:
-            return {"real_ip": row[0], "server_port": row[1]}
+            return {row[0], row[1]}
         return None
 
 
