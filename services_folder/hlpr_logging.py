@@ -1,5 +1,6 @@
 import logging
 
+logging.basicConfig(level=logging.INFO)
 # Цвета для терминала
 COLORS = {
     "DEBUG": "\033[38;5;245m",    # серый

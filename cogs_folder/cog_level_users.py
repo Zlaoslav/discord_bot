@@ -103,6 +103,16 @@ class level_xp(commands.Cog):
         
         await try_give_xp(self.bot, payload.guild_id, payload.user_id)
 
+    @commands.Cog.listener()
+    async def on_message(
+        self,
+        message: discord.Message
+    ):
+        if message.author.bot:
+            return  # реакция от бота, игнорируем
+        
+        await try_give_xp(self.bot, message.guild.id, message.author.id)
+        
 
 
 async def setup(bot: Bot):
