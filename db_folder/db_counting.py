@@ -84,7 +84,7 @@ class CountingRepository:
         await self.db.execute(
             f"""UPDATE {self.__TABLE}
             SET next_expected = next_expected + 1
-            WHERE id = ?
+            WHERE guild_id = ?
             """,
             (guild_id,)
         )
