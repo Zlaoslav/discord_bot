@@ -17,17 +17,15 @@ class CountingRepository:
 
         await self.db.execute(
             f"""
-                UPDATE {self.__TABLE}
-                SET channel_id = ?, next_expected = ?
-                WHERE guild_id = ?
+                INSERT INTO {self.__TABLE} (guild_id, channel_id, next_expected)
+                VALUES (?, ?, ?)
+                ON CONFLICT(guild_id)
+                DO UPDATE SET
+                    channel_id = excluded.channel_id,
+                    next_expected = excluded.next_expected
             """,
-            (
-                channel_id,
-                start_value,
-                guild_id
-            )
+            (guild_id, channel_id, start_value)
         )
-
         await self.db.commit()
         return True
 

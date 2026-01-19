@@ -1,6 +1,6 @@
 import logging
 
-logging.basicConfig(level=logging.INFO)
+
 # Цвета для терминала
 COLORS = {
     "DEBUG": "\033[38;5;245m",    # серый
@@ -32,7 +32,10 @@ class ColorFormatter(logging.Formatter):
         )
 
         return msg
-
+    
+logging.basicConfig(level=logging.INFO)
+logging.getLogger("aiosqlite").setLevel(logging.WARNING)
+logging.getLogger("aiosqlite.core").setLevel(logging.WARNING)
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
