@@ -119,10 +119,10 @@ class counting(commands.Cog):
             return
 
         # получаем состояние единственного счётчика
-        channel_id, next_expected = await self.bot.db.counting.get_counter_state(message.guild.id)
-        if channel_id is None or next_expected is None:
+        row = await self.bot.db.counting.get_counter_state(message.guild.id)
+        if row is None:
             return  # счётчик не настроен
-
+        channel_id, next_expected = row
         
         # работаем только в настроенном канале
         if message.channel.id != channel_id:

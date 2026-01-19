@@ -73,7 +73,7 @@ class CountingRepository:
         channel_id, next_expected = row
         if channel_id is None:
             return None
-        return int(channel_id), int(next_expected)
+        return (int(channel_id), int(next_expected))
 
 
 
