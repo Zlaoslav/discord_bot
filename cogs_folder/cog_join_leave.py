@@ -31,7 +31,7 @@ class join_leave(commands.Cog):
             return
         targetchanel = channel or interaction.channel
         try:
-            await self.bot.db.join_leave.save_join_leave_channel(targetchanel.id, mention_role.id)
+            await self.bot.db.join_leave.save_join_leave_channel(interaction.guild.id, targetchanel.id, mention_role.id)
             await interaction.response.send_message("Успешно!", ephemeral=True)
         except Exception as e:
             logger.error(e)

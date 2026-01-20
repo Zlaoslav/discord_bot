@@ -7,7 +7,12 @@ class JoinLeaveRepository:
     def __init__(self, db: aiosqlite.Connection):
         self.db = db
     
-    async def save_join_leave_channel(self, channel_id: Optional[int], guild_id : int, role_id: int | None = None) -> bool:
+    async def save_join_leave_channel(
+        self,
+        guild_id : int,
+        channel_id: Optional[int],
+        role_id: int | None = None
+    ) -> bool:
         """Сохраняет ID канала, куда надо отправить уведомление при выходе/входе участников на сервер."""
 
         role_id = role_id or 0
