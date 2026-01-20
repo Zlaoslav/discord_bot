@@ -40,7 +40,8 @@ class join_leave(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_remove(self, member):
-        channel_id, role_id = await self.bot.db.join_leave.get_join_leave_channel(member.guild.id)
+        row = await self.bot.db.join_leave.get_join_leave_channel(member.guild.id)
+        channel_id, role_id = row
         if channel_id == None:
             return
 
@@ -55,7 +56,8 @@ class join_leave(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
-        channel_id, role_id = await self.bot.db.join_leave.get_join_leave_channel(member.guild.id)
+        row = await self.bot.db.join_leave.get_join_leave_channel(member.guild.id)
+        channel_id, role_id = row
         if channel_id == None:
             return
 

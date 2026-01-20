@@ -36,6 +36,6 @@ class JoinLeaveRepository:
         row = await cursor.fetchone()
         channel_id = row[0] if row else None
         role_id = row[1] if row else None
-        return channel_id, role_id
+        return (channel_id, role_id)
 
 
