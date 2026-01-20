@@ -27,7 +27,7 @@ class JoinLeaveRepository:
         """Возвращает сохранённый channel_id для join/leave."""
         cursor = await self.db.execute(
             f"""
-                SELECT channel_id, role_id
+                SELECT channel_id, mention_role_id
                 FROM {self.__TABLE}
                 WHERE guild_id = ?
             """,
