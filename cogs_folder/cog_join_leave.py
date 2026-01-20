@@ -41,7 +41,7 @@ class join_leave(commands.Cog):
 
 
     @commands.Cog.listener()
-    async def on_member_remove(self, member):
+    async def on_member_remove(self, member: discord.Member):
         row = await self.bot.db.join_leave.get_join_leave_channel(member.guild.id)
         channel_id, role_id = row
         if channel_id == None:
@@ -60,12 +60,12 @@ class join_leave(commands.Cog):
         minutes = (delta.seconds % 3600) // 60
 
         await channel.send(
-            f"Пользователь {member.mention} ({member.name}), пробыл на сервере: {days}d.{hours}h.{minutes}m, id: `{member.id}` покинул сервер."
+            f"[Пользователь](<https://discord.com/users/{member.id}>) {member.mention} ({member.name}), пробыл на сервере: {days}d.{hours}h.{minutes}m, id: `{member.id}` и покинул сервер."
         )
 
 
     @commands.Cog.listener()
-    async def on_member_join(self, member):
+    async def on_member_join(self, member: discord.Member):
         row = await self.bot.db.join_leave.get_join_leave_channel(member.guild.id)
         channel_id, role_id = row
         if channel_id == None:
@@ -83,11 +83,11 @@ class join_leave(commands.Cog):
 
         if role_id:
             await channel.send(
-                f"Добро пожаловать, {member.mention}! ({member.name}), age: {age_days}, id: `{member.id}` <@&{role_id}>", 
+                f"Добро пожаловать, {member.mention}! ({member.name}), account age: {age_days}, id: `{member.id}` <@&{role_id}>", 
             )
         else:
             await channel.send(
-                f"Добро пожаловать, {member.mention}! ({member.name}), age: {age_days}, id: `{member.id}`", 
+                f"Добро пожаловать, {member.mention}! ({member.name}), account age: {age_days}, id: `{member.id}`", 
             )
 
 
