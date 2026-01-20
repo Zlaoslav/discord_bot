@@ -13,11 +13,14 @@ class JoinLeaveRepository:
         role_id = role_id or 0
         await self.db.execute(
             f"""
-                UPDATE {self.__TABLE}
-                SET channel_id = ?, mention_role_id = ?
-                WHERE guild_id = ? 
+                INSERT INTO {self.__TABLE} (guild_id, channel_id, mention_role_id)
+                VALUES (?, ?, ?)
+                ON CONFLICT(guild_id)
+                DO UPDATE SET
+                    channel_id = excluded.channel_id,
+                    mention_role_id = excluded.mention_role_id
             """,
-            (channel_id, guild_id, role_id)
+            (guild_id, channel_id, role_id)
         )
         await self.db.commit()
         return True
@@ -37,5 +40,4 @@ class JoinLeaveRepository:
         channel_id = row[0] if row else None
         role_id = row[1] if row else None
         return (channel_id, role_id)
-
 
