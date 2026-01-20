@@ -1,4 +1,3 @@
-from version import CODEVERSION
 import os
 import asyncio
 from typing import Any, Optional, Dict
@@ -139,9 +138,9 @@ class Bot(commands.Bot):
             ext = f"cogs_folder.{file[:-3]}"
             try:
                 await self.load_extension(ext)
-                print(f"[COG] Loaded: {ext}")
+                logger.info(f"COG loaded: {ext}")
             except Exception as e:
-                print(f"[COG] Failed to load {ext}: {e}")
+                logger.error(f"Failed to load cog: {ext}, Error: {e}")
 
     async def close(self):
         if self.db:

@@ -643,7 +643,7 @@ async def claim_lock(channel):
     ts = datetime.now(timezone.utc).isoformat()
     pid = os.getpid()
     try:
-        from version import CODEVERSION
+        from configs_folder.advanced_settings import CODEVERSION
     except:
         CODEVERSION = "vunknown"
     m = await channel.send(f"{LOCK_PREFIX}{USERNAME}|{HOSTNAME}|{pid}|{INSTANCE_ID}|{ts}|v{CODEVERSION}")
