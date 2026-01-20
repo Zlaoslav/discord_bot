@@ -20,15 +20,15 @@ class root(commands.Cog):
         cog_name: str
     ):
         await interaction.response.defer()
-        if not perms_manager.has_perm(interaction.id, perms_manager.PermRole.HOST):
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.HOST):
             await interaction.followup.send("У вас нет прав для этой команды.")
             return
         
         try:
-            await self.bot.reload_extension(f"cogs_folder.{cog_name}")
-            await interaction.followup.send(f"cogs_folder.{cog_name} успешно перезагружен!")
+            await self.bot.reload_extension(f"cogs_folder.cog_{cog_name}")
+            await interaction.followup.send(f"cogs_folder.cog_{cog_name} успешно перезагружен!")
         except Exception as e:
-            await interaction.followup.send(f"cogs_folder.{cog_name} ошибка перезагрузки!")
+            await interaction.followup.send(f"cogs_folder.cog_{cog_name} ошибка перезагрузки!")
             logger.error(e)
 
     @commands.command(name="reload_cog")
@@ -42,10 +42,10 @@ class root(commands.Cog):
             return
         
         try:
-            await self.bot.reload_extension(f"cogs_folder.{cog_name}")
-            await ctx.send(f"cogs_folder.{cog_name} успешно перезагружен!")
+            await self.bot.reload_extension(f"cogs_folder.cog_{cog_name}")
+            await ctx.send(f"cogs_folder.cog_{cog_name} успешно перезагружен!")
         except Exception as e:
-            await ctx.send(f"cogs_folder.{cog_name} ошибка перезагрузки!")
+            await ctx.send(f"cogs_folder.cog_{cog_name} ошибка перезагрузки!")
             logger.error(e)
 
 
@@ -60,7 +60,7 @@ class root(commands.Cog):
         cog_name: str
     ):
         await interaction.response.defer()
-        if not perms_manager.has_perm(interaction.id, perms_manager.PermRole.HOST):
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.HOST):
             await interaction.followup.send("У вас нет прав для этой команды.")
             return
         
@@ -69,10 +69,10 @@ class root(commands.Cog):
             return
         
         try:
-            await self.bot.unload_extension(f"cogs_folder.{cog_name}")
-            await interaction.followup.send(f"cogs_folder.{cog_name} успешно выключен!")
+            await self.bot.unload_extension(f"cogs_folder.cog_{cog_name}")
+            await interaction.followup.send(f"cogs_folder.cog_{cog_name} успешно выключен!")
         except Exception as e:
-            await interaction.followup.send(f"cogs_folder.{cog_name} ошибка выключения!")
+            await interaction.followup.send(f"cogs_folder.cog_{cog_name} ошибка выключения!")
             logger.error(e)
 
     @commands.command(name="unload_cog")
@@ -90,10 +90,10 @@ class root(commands.Cog):
             return
         
         try:
-            await self.bot.unload_extension(f"cogs_folder.{cog_name}")
-            await ctx.send(f"cogs_folder.{cog_name} успешно выключен!")
+            await self.bot.unload_extension(f"cogs_folder.cog_{cog_name}")
+            await ctx.send(f"cogs_folder.cog_{cog_name} успешно выключен!")
         except Exception as e:
-            await ctx.send(f"cogs_folder.{cog_name} ошибка выключения!")
+            await ctx.send(f"cogs_folder.cog_{cog_name} ошибка выключения!")
             logger.error(e)
 
 
@@ -108,15 +108,15 @@ class root(commands.Cog):
         cog_name: str
     ):
         await interaction.response.defer()
-        if not perms_manager.has_perm(interaction.id, perms_manager.PermRole.HOST):
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.HOST):
             await interaction.followup.send("У вас нет прав для этой команды.")
             return
 
         try:
-            await self.bot.load_extension(f"cogs_folder.{cog_name}")
-            await interaction.followup.send(f"cogs_folder.{cog_name} успешно включён!")
+            await self.bot.load_extension(f"cogs_folder.cog_{cog_name}")
+            await interaction.followup.send(f"cogs_folder.cog_{cog_name} успешно включён!")
         except Exception as e:
-            await interaction.followup.send(f"cogs_folder.{cog_name} ошибка включения!")
+            await interaction.followup.send(f"cogs_folder.cog_{cog_name} ошибка включения!")
             logger.error(e)
 
     @commands.command(name="load_cog")
@@ -131,10 +131,10 @@ class root(commands.Cog):
 
         
         try:
-            await self.bot.load_extension(f"cogs_folder.{cog_name}")
-            await ctx.send(f"cogs_folder.{cog_name} успешно включён!")
+            await self.bot.load_extension(f"cogs_folder.cog_{cog_name}")
+            await ctx.send(f"cogs_folder.cog_{cog_name} успешно включён!")
         except Exception as e:
-            await ctx.send(f"cogs_folder.{cog_name} ошибка включения!")
+            await ctx.send(f"cogs_folder.cog_{cog_name} ошибка включения!")
             logger.error(e)
 
 
