@@ -5,6 +5,8 @@ from discord import app_commands
 import services_folder.hlpr_perms_manager as perms_manager
 from services_folder.hlpr_logging import logger
 
+from datetime import datetime, timezone
+
 class join_leave(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
@@ -49,8 +51,16 @@ class join_leave(commands.Cog):
         if channel is None:
             return
 
+
+        now = datetime.now(timezone.utc)
+        delta = now - member.joined_at
+
+        days = delta.days
+        hours = delta.seconds // 3600
+        minutes = (delta.seconds % 3600) // 60
+
         await channel.send(
-            f"Пользователь {member.mention} ({member.name}) id: `{member.id}` покинул сервер."
+            f"Пользователь {member.mention} ({member.name}), пробыл на сервере: {days}d.{hours}h.{minutes}m, id: `{member.id}` покинул сервер."
         )
 
 
@@ -65,13 +75,19 @@ class join_leave(commands.Cog):
         if channel is None:
             return
         
+
+        created_at = member.created_at  # datetime (UTC)
+        now = datetime.now(timezone.utc)
+
+        age_days = (now - created_at).days or "unknown"
+
         if role_id:
             await channel.send(
-                f"Добро пожаловать, {member.mention}! ({member.name}, id: `{member.id}` <@&{role_id}>)", 
+                f"Добро пожаловать, {member.mention}! ({member.name}), age: {age_days}, id: `{member.id}` <@&{role_id}>", 
             )
         else:
             await channel.send(
-                f"Добро пожаловать, {member.mention}! ({member.name}, id: `{member.id}`)", 
+                f"Добро пожаловать, {member.mention}! ({member.name}), age: {age_days}, id: `{member.id}`", 
             )
 
 
