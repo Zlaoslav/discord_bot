@@ -18,24 +18,23 @@ class MinecraftPlayersView(discord.ui.View):
     @discord.ui.button(label="👥 Показать игроков", style=discord.ButtonStyle.primary)
     async def show_players(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Берем real_ip и query_port из базы
-
+        await interaction.response.defer(ephemeral=True)
+        temp_msg = await interaction.followup.send("⏳ Получаем информацию о игроках...", ephemeral=True)
 
         row = await self.bot.db.minecraft_panel.get_panel_by_message_id(self.guild_id, self.message_id)
 
         if not row:
-            await interaction.response.send_message("❌ Панель не найдена в базе.", ephemeral=True)
+            await temp_msg.edit(content="❌ Панель не найдена в базе.", ephemeral=True)
             return
 
         real_ip, query_port = row
 
         if not query_port:
-            await interaction.response.send_message("❌ Query порт не указан для этой панели.", ephemeral=True)
+            await temp_msg.edit(content="❌ Query порт не указан для этой панели.", ephemeral=True)
             return
 
         url = f"http://{real_ip}:{query_port}/info"
 
-        await interaction.response.defer(ephemeral=True)
-        temp_msg = await interaction.followup.send("⏳ Получаем информацию о игроках...", ephemeral=True)
 
         players = []
         try:
