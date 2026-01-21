@@ -49,7 +49,7 @@ class MinecraftPanelRepository:
 
         cursor = await self.db.execute(
             f"""
-                SELECT real_ip, server_port
+                SELECT real_ip, query_port
                 FROM {self.__TABLE}
                 WHERE guild_id = ? AND message_id = ?
             """,
