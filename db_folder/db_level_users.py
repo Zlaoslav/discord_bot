@@ -1,5 +1,5 @@
 import aiosqlite
-
+from typing import Literal
 class LevelUsersRepository:
     __TABLE = "level_users"
 
@@ -120,3 +120,69 @@ class LevelUsersRepository:
         )
         await self.db.commit()
         return True
+
+
+    async def get_top_users(
+        self,
+        guild_id: int,
+        limit: int = 10,
+        offset: int = 0,
+        sort_by: Literal["xp", "voice_time", "level"] = "xp"
+    ) -> list[tuple[int, int, int, int]]:
+        """
+        Возвращает:
+        user_id, xp, voice_time, level
+        """
+
+        cursor = await self.db.execute(
+            f"""
+            SELECT user_id, xp, voice_time, level
+            FROM {self.__TABLE}
+            WHERE guild_id = ?
+            ORDER BY {sort_by} DESC
+            LIMIT ? OFFSET ?
+            """,
+            (guild_id, limit, offset)
+        )
+        return await cursor.fetchall()
+
+
+    async def get_user_rank(
+        self,
+        guild_id: int,
+        user_id: int,
+        sort_by: Literal["xp", "voice_time", "level"] = "xp"
+    ) -> int | None:
+        """
+        Возвращает позицию пользователя в топе (1-based)
+        """
+
+        # Получаем значение поля пользователя
+        cursor = await self.db.execute(
+            f"""
+            SELECT {sort_by}
+            FROM {self.__TABLE}
+            WHERE guild_id = ? AND user_id = ?
+            """,
+            (guild_id, user_id)
+        )
+        row = await cursor.fetchone()
+
+        if not row:
+            return None
+
+        value = row[0]
+
+        # Считаем сколько пользователей выше
+        cursor = await self.db.execute(
+            f"""
+            SELECT COUNT(*)
+            FROM {self.__TABLE}
+            WHERE guild_id = ?
+              AND {sort_by} > ?
+            """,
+            (guild_id, value)
+        )
+        count = (await cursor.fetchone())[0]
+
+        return count + 1

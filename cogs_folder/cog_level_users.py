@@ -51,7 +51,7 @@ class level_xp(commands.Cog):
         )
 
         embed.set_thumbnail(url=member.display_avatar.url)
-
+        embed.add_field(name="Топ", value=f"Место в топе по серверу: {self.bot.db.level_users.get_user_rank(interaction.guild.id, interaction.user.id)}")
         embed.add_field(name="Уровень", value=f"**{level}**", inline=True)
         embed.add_field(name="До следующего уровня", value=f"{xp_left} XP", inline=True)
         embed.add_field(name="Время в voice", value=str(voice_time), inline=False)
@@ -112,6 +112,88 @@ class level_xp(commands.Cog):
             return  # реакция от бота, игнорируем
         
         await try_give_xp(self.bot, message.guild.id, message.author.id)
+        
+
+    @app_commands.command(
+        name="lvltop",
+        description="Посмотреть топ уровней"
+    )
+    @app_commands.choices(
+        category=[
+            app_commands.Choice(name="Опыт", value="xp"),
+            app_commands.Choice(name="Уровень", value="lvl"),
+            app_commands.Choice(name="Время войса", value="voice_time"),
+        ]
+    )
+    async def lvltop(
+        self,
+        interaction: discord.Interaction,
+        category: app_commands.Choice[str],
+        top: int | None = None,
+        start_at: int | None = None
+    ):
+        top = top or 10
+        start_at = start_at or 0
+
+        # Валидация
+        if start_at >= top:
+            await interaction.response.send_message(
+                "start_at не может быть больше или равен top!",
+                ephemeral=True
+            )
+            return
+
+        if top - start_at > 50:
+            await interaction.response.send_message(
+                "Максимум 50 пользователей за раз! (уменьшите top или увеличьте start_at)",
+                ephemeral=True
+            )
+            return
+
+        sort_by = category.value  # "xp" | "voice_time" | "level"
+
+        # Получаем данные
+        users = await self.bot.db.level_users.get_top_users(
+            guild_id=interaction.guild.id,
+            limit=top - start_at,
+            offset=start_at,
+            sort_by=sort_by
+        )
+
+        if not users:
+            await interaction.response.send_message(
+                "Данные отсутствуют.",
+                ephemeral=True
+            )
+            return
+
+        # Формирование ответа
+        lines: list[str] = []
+        position = start_at + 1
+
+        for user_id, xp, voice_time, level in users:
+            value = {
+                "xp": xp,
+                "voice_time": voice_time,
+                "level": level
+            }[sort_by]
+
+            lines.append(
+                f"**#{position}** <@{user_id}> — `{value}`"
+            )
+            position += 1
+
+        embed = discord.Embed(
+            title=f"🏆 Топ пользователей по {sort_by}",
+            description="\n".join(lines),
+            color=discord.Color.gold()
+        )
+        embed.set_footer(
+            text=f"Запросил: {interaction.user.display_name}",
+            icon_url=interaction.user.display_avatar.url
+        )
+        await interaction.response.send_message(embed=embed)
+
         
 
 
