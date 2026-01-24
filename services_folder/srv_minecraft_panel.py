@@ -33,7 +33,7 @@ class MinecraftPlayersView(discord.ui.View):
             await temp_msg.edit(content="❌ Query порт не указан для этой панели.", ephemeral=True)
             return
         
-        if len(real_ip) <= 5:
+        if len(str(real_ip)) <= 5:
             real_ip, query_port = query_port, real_ip
             
         url = f"http://{real_ip}:{query_port}/info"
