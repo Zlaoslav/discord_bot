@@ -5,7 +5,7 @@ from discord import app_commands
 import services_folder.hlpr_perms_manager as perms_manager
 from services_folder.hlpr_logging import logger
 
-
+from start import git_update
 class root(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
@@ -136,6 +136,24 @@ class root(commands.Cog):
         except Exception as e:
             await ctx.send(f"cogs_folder.cog_{cog_name} ошибка включения!")
             logger.error(e)
+
+
+    @commands.command(name="updatebot")
+    async def updatebot(
+        self,
+        ctx: commands.Context
+    ):
+        if not perms_manager.has_perm(ctx.author.id, perms_manager.PermRole.HOST):
+            await ctx.send("У вас нет прав для этой команды.")
+            return
+        
+        ctx.send("Обновление...")
+        ok = git_update()
+        if ok:
+            ctx.send("Успешно обновлено")
+        else:
+            ctx.send("Ошибка обновления!")
+        
 
 
 async def setup(bot: Bot):
