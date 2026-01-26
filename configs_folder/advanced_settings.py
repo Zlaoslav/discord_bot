@@ -156,3 +156,5 @@ YTDL_OPTS = {
 
 
 
+
+REPO_URL = "https://github.com/Zlaoslav/discord_bot"
