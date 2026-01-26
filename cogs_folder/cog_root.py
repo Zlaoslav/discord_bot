@@ -290,12 +290,12 @@ class root(commands.Cog):
             await ctx.send("У вас нет прав для этой команды.")
             return
         
-        ctx.send("Обновление...")
+        await ctx.send("Обновление...")
         ok = git_update()
         if ok:
-            ctx.send("Успешно обновлено")
+            await ctx.send("Успешно обновлено")
         else:
-            ctx.send("Ошибка обновления!")
+            await ctx.send("Ошибка обновления!")
         
 
 
