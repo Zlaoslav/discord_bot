@@ -123,7 +123,7 @@ import time
 START_TIME = time.time()
 
 OWNER_ID = 727105264486187090
-CODEVERSION = "1.8.4"
+CODEVERSION = "1.9.0"
 from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 SOUNDS_DIR = BASE_DIR / "sounds"

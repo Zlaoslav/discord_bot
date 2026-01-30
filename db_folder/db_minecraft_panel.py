@@ -1,6 +1,5 @@
 import aiosqlite
 from services_folder.hlpr_logging import logger
-from mcstatus import JavaServer
 
 class MinecraftPanelRepository:
     __TABLE = "minecraft_panels"
@@ -40,13 +39,11 @@ class MinecraftPanelRepository:
         return True
 
 
-
     async def get_panel_by_message_id(
         self,
         guild_id: int,
         message_id: int
     ):
-
         cursor = await self.db.execute(
             f"""
                 SELECT real_ip, query_port
@@ -60,7 +57,8 @@ class MinecraftPanelRepository:
         )
         row = await cursor.fetchone()
         if row:
-            return {row[0], row[1]}
+            # Возвращаем кортеж (real_ip, query_port)
+            return (row[0], row[1])
         return None
 
 
@@ -82,58 +80,6 @@ class MinecraftPanelRepository:
         return True
 
 
-
-    async def get_server_info(ip: str, query_port: int | None = None):
-        """
-        Возвращает информацию о сервере Minecraft:
-        - статус онлайн/офлайн
-        - игроков онлайн / макс
-        - список игроков (через query, если query_port задан)
-        - иконка
-        - источник данных ("ping" или "query")
-        """
-
-        # создаём объект для ping/status
-        try:
-            server = JavaServer.lookup(ip)
-            status = server.status()
-            logger.info(f"[DEBUG] Статус сервера {ip}: онлайн={status.players.online}/{status.players.max}")
-        except Exception as e:
-            logger.error(f"[DEBUG] Сервер офлайн или ошибка: {e}")
-            return {
-                "online": False,
-                "players_online": 0,
-                "players_max": 0,
-                "players": [],
-                "icon": None,
-                "source": "offline"
-            }
-
-        # по умолчанию список игроков пуст, источник ping
-        players = []
-        source = "ping"
-
-        # query — только для кнопки игроков
-        if query_port:
-            try:
-                query_server = JavaServer.lookup(f"{ip}:{query_port}")
-                query = query_server.query()
-                logger.info(f"[DEBUG] Query сработал, игроки: {query.players.names}")
-                if query.players.names:
-                    players = query.players.names
-                    source = "query"
-            except Exception as e:
-                logger.warning(f"[DEBUG] Query не сработал: {e}")
-
-        return {
-            "online": True,
-            "players_online": status.players.online,
-            "players_max": status.players.max,
-            "players": players,
-            "icon": status.icon,
-            "source": source
-       }
-    
     async def get_all_panels(self):
         cursor = await self.db.execute(
             f"""

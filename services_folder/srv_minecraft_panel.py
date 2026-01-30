@@ -6,7 +6,7 @@ from services_folder.hlpr_logging import logger
 import aiohttp
 import re
 import json
-
+import asyncio
 
 class MinecraftPlayersView(discord.ui.View):
     def __init__(self, bot: Bot, guild_id: int, message_id: int):
@@ -24,25 +24,26 @@ class MinecraftPlayersView(discord.ui.View):
         row = await self.bot.db.minecraft_panel.get_panel_by_message_id(self.guild_id, self.message_id)
 
         if not row:
-            await temp_msg.edit(content="❌ Панель не найдена в базе.", ephemeral=True)
+            await temp_msg.edit(content="❌ Панель не найдена в базе.")
             return
 
         real_ip, query_port = row
 
         if not query_port:
-            await temp_msg.edit(content="❌ Query порт не указан для этой панели.", ephemeral=True)
+            await temp_msg.edit(content="❌ Query порт не указан для этой панели.")
             return
-        
+
+        # Иногда real_ip и query_port могли перепутаться местами в БД — попытка угадать
         if len(str(real_ip)) <= 5:
             real_ip, query_port = query_port, real_ip
-            
-        url = f"http://{real_ip}:{query_port}/info"
 
+        url = f"http://{real_ip}:{query_port}/info"
 
         players = []
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=10) as resp:
+            timeout = aiohttp.ClientTimeout(total=10)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(url) as resp:
                     text = await resp.text()
 
                     # Попытка исправить некорректные имена игроков в массиве players
@@ -85,6 +86,17 @@ class MinecraftPlayersView(discord.ui.View):
 
         await temp_msg.edit(content=text)
 
+
+async def _sync_status(ip: str):
+    # Вспомогательная sync-функция для выполнения в отдельном потоке
+    server = JavaServer.lookup(ip)
+    return server.status()
+
+async def _sync_query(ip: str, query_port: int):
+    server = JavaServer.lookup(f"{ip}:{query_port}")
+    return server.query()
+
+
 async def get_server_info(ip: str, query_port: int | None = None):
     """
     Возвращает информацию о сервере Minecraft:
@@ -94,14 +106,11 @@ async def get_server_info(ip: str, query_port: int | None = None):
     - иконка
     - источник данных ("ping" или "query")
     """
-
-    # создаём объект для ping/status
+    # Выполняем блокирующие mcstatus-вызовы в threadpool, чтобы не блокировать event loop
     try:
-        server = JavaServer.lookup(ip)
-        status = server.status()
-        #logging.info(f"[DEBUG] Статус сервера {ip}: онлайн={status.players.online}/{status.players.max}")
+        status = await asyncio.to_thread(lambda: _sync_status(ip))
     except Exception as e:
-        #logging.error(f"[DEBUG] Сервер офлайн или ошибка: {e}")
+        logger.info(f"[DEBUG] Сервер офлайн или ошибка (ping): {e}")
         return {
             "online": False,
             "players_online": 0,
@@ -118,15 +127,13 @@ async def get_server_info(ip: str, query_port: int | None = None):
     # query — только для кнопки игроков
     if query_port:
         try:
-            query_server = JavaServer.lookup(f"{ip}:{query_port}")
-            query = query_server.query()
-            #logging.info(f"[DEBUG] Query сработал, игроки: {query.players.names}")
-            if query.players.names:
+            query = await asyncio.to_thread(lambda: _sync_query(ip, query_port))
+            if getattr(query.players, "names", None):
                 players = query.players.names
                 source = "query"
-        except Exception as e:
+        except Exception:
+            # Query может упасть — игнорируем (оставляем ping-результат)
             pass
-            #logging.warning(f"[DEBUG] Query не сработал: {e}")
 
     return {
         "online": True,

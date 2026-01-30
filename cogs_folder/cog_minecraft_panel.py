@@ -31,13 +31,15 @@ class minecraft_panel(commands.Cog):
 
         if real_ip is None:
             real_ip = ip  # если реальный IP не указан, берем ip сервера
-    
+
         embed, view = await create_send_save_minecraft_panel(
             self.bot, interaction, ip, real_ip, port, query_port
         )
 
+        # Отправляем панель в канал (видимую всем)
         msg = await interaction.channel.send(embed=embed, view=view)
 
+        # Обновляем данные view (guild_id и message_id)
         view.guild_id = interaction.guild_id
         view.message_id = msg.id
 
@@ -51,7 +53,6 @@ class minecraft_panel(commands.Cog):
             message_id=msg.id
         )
 
-
         # Если таск обновления не запущен — запускаем
         if not self.update_panels_task.is_running():
             self.update_panels_task.start()
@@ -60,7 +61,6 @@ class minecraft_panel(commands.Cog):
         await interaction.followup.send("✅ Панель успешно отправлена!", ephemeral=True)
 
 
-        
     @commands.Cog.listener()
     async def on_ready(self):
         if not self.update_panels_task.is_running():
@@ -87,15 +87,14 @@ class minecraft_panel(commands.Cog):
                 message = await channel.fetch_message(message_id)
                 embed, view = await create_minecraft_panel(server_ip, real_ip, port, query_port, self.bot, guild_id, message_id)
 
-                # Обновляем guild_id и message_id в кнопке
-                for child in view.children:
-                    if isinstance(child, discord.ui.Button):
-                        view.guild_id = guild_id
-                        view.message_id = message_id
+                # Обновляем guild_id и message_id у view
+                view.guild_id = guild_id
+                view.message_id = message_id
 
                 await message.edit(embed=embed, view=view)
 
             except discord.NotFound:
+                # Удаляем запись из БД, если сообщение удалено
                 await self.bot.db.minecraft_panel.delete_minecraft_panel(int(message_id))
                 logger.info(f"[PANEL REMOVE] {server_ip}:{port} — сообщение удалено")
 
