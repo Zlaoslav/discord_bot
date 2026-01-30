@@ -87,12 +87,12 @@ class MinecraftPlayersView(discord.ui.View):
         await temp_msg.edit(content=text)
 
 
-async def _sync_status(ip: str):
+def _sync_status(ip: str):
     # Вспомогательная sync-функция для выполнения в отдельном потоке
     server = JavaServer.lookup(ip)
     return server.status()
 
-async def _sync_query(ip: str, query_port: int):
+def _sync_query(ip: str, query_port: int):
     server = JavaServer.lookup(f"{ip}:{query_port}")
     return server.query()
 
