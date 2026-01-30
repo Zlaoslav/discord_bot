@@ -3,7 +3,6 @@ import asyncio
 from typing import Any, Optional, Dict
 from pathlib import Path
 import json
-import logging
 import socket
 import time
 
@@ -23,49 +22,6 @@ USERNAME = os.getenv("USERNAME") or "unknown"
 HOSTNAME = socket.gethostname()
 START_TIME = time.time()
 
-# ------------------ logging setup ------------------
-COLORS = {
-    "DEBUG": "\033[38;5;245m",   # серый
-    "INFO": "\033[38;5;39m",     # синий
-    "WARNING": "\033[38;5;220m", # жёлтый
-    "ERROR": "\033[38;5;203m",   # красный
-    "CRITICAL": "\033[41m",      # белый на красном фоне
-    "TIME": "\033[38;5;240m",    # тёмно-серый
-    "SOURCE": "\033[38;5;141m",  # фиолетовый
-    "RESET": "\033[0m"
-}
-
-class ColorFormatter(logging.Formatter):
-    def format(self, record):
-        level_color = COLORS.get(record.levelname, COLORS["RESET"])
-        time_color = COLORS["TIME"]
-        source_color = COLORS["SOURCE"]
-
-        msg = super().format(record)
-
-        msg = msg.replace(
-            record.asctime, f"{time_color}{record.asctime}{COLORS['RESET']}"
-        ).replace(
-            record.levelname, f"{level_color}{record.levelname}{COLORS['RESET']}"
-        ).replace(
-            f"{record.filename}:{record.lineno}",
-            f"{source_color}{record.filename}:{record.lineno}{COLORS['RESET']}"
-        )
-
-        return msg
-
-# Формат с указанием файла и строки
-formatter = ColorFormatter(
-    "%(asctime)s [%(levelname)s] %(filename)s:%(lineno)d — %(message)s",
-    "%Y-%m-%d %H:%M:%S"
-)
-
-handler = logging.StreamHandler()
-handler.setFormatter(formatter)
-
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
-logger.addHandler(handler)
 
 # ------------------ setings setup ------------------
 CONFIGS_FODLER = Path(__file__).with_name("configs_folder")
@@ -89,13 +45,13 @@ GUILD = discord.Object(id=GUILD_ID)
 async def apply_guild_config(guild_id: int, cfg: dict):
     """Default stub: override or extend in your bot code to apply configuration immediately."""
     try:
-        logger.info('apply_guild_config called for %s: %s', guild_id, cfg)
+        print('apply_guild_config called for %s: %s', guild_id, cfg)
         # Example: apply some settings — implement as needed
         # guild = bot.get_guild(guild_id)
         # if guild and cfg.get('some_setting'):
         #     ...
     except Exception:
-        logger.exception('apply_guild_config failed')
+        print('apply_guild_config failed')
 
 
 
@@ -138,9 +94,9 @@ class Bot(commands.Bot):
             ext = f"cogs_folder.{file[:-3]}"
             try:
                 await self.load_extension(ext)
-                logger.info(f"COG loaded: {ext}")
+                print(f"COG loaded: {ext}")
             except Exception as e:
-                logger.error(f"Failed to load cog: {ext}, Error: {e}")
+                print(f"Failed to load cog: {ext}, Error: {e}")
 
     async def close(self):
         if self.db:
