@@ -1,3 +1,4 @@
+![Alt](https://repobeats.axiom.co/api/embed/2f5e9539b8c46ba575bc3a268645a16f37168272.svg "Repobeats analytics image")
 # Discrod бот разработнный пользователем Slavik (78060)
 По всем вопросам и предложениям пишите мне в личные сообщения.
 
