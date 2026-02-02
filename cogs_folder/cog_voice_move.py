@@ -23,8 +23,8 @@ class voice_move(commands.Cog):
             return
         
         for member in from_channel.members:
-            member.move_to(in_channel)
-        interaction.followup.send("Все участники перемещены.")
+            await member.move_to(in_channel)
+        await interaction.followup.send("Все участники перемещены.")
 
         
     @app_commands.command(
@@ -42,8 +42,8 @@ class voice_move(commands.Cog):
             return
         
         for member in from_channel.members:
-            member.move_to(None)
-        interaction.followup.send("Все участники отключены.")
+            await member.move_to(None)
+        await interaction.followup.send("Все участники отключены.")
 
         
 
