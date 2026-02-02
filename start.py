@@ -1,3 +1,8 @@
+from async_console import AsyncConsole
+
+console = AsyncConsole()
+console.start()
+
 from __future__ import annotations
 import os
 import sys
