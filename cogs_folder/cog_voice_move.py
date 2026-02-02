@@ -14,8 +14,8 @@ class voice_move(commands.Cog):
     async def move_all(
         self,
         interaction: discord.Interaction,
-        from_channel: discord.abc.Connectable,
-        in_channel: discord.abc.Connectable
+        from_channel: discord.VoiceChannel | discord.StageChannel,
+        in_channel: discord.VoiceChannel | discord.StageChannel
     ):
         await interaction.response.defer()
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
@@ -34,7 +34,7 @@ class voice_move(commands.Cog):
     async def disconnect_all(
         self,
         interaction: discord.Interaction,
-        from_channel: discord.abc.Connectable
+        from_channel: discord.VoiceChannel | discord.StageChannel
     ):
         await interaction.response.defer()
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
