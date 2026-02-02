@@ -15,7 +15,7 @@ from db_folder import DB
 
 import services_folder.hlpr_perms_manager as hlpr_perms_manager
 from configs_folder.advanced_settings import OWNER_ID
-
+from services_folder.hlpr_logging import logger
 # ------------------ main vars setup ------------------
 SCRIPT_DIR = Path(__file__).parent
 USERNAME = os.getenv("USERNAME") or "unknown"
@@ -45,13 +45,13 @@ GUILD = discord.Object(id=GUILD_ID)
 async def apply_guild_config(guild_id: int, cfg: dict):
     """Default stub: override or extend in your bot code to apply configuration immediately."""
     try:
-        print('apply_guild_config called for %s: %s', guild_id, cfg)
+        logger.info(f"apply_guild_config called for %s: %s, {guild_id}, {cfg}")
         # Example: apply some settings — implement as needed
         # guild = bot.get_guild(guild_id)
         # if guild and cfg.get('some_setting'):
         #     ...
     except Exception:
-        print('apply_guild_config failed')
+        logger.info('apply_guild_config failed')
 
 
 
@@ -94,9 +94,9 @@ class Bot(commands.Bot):
             ext = f"cogs_folder.{file[:-3]}"
             try:
                 await self.load_extension(ext)
-                print(f"COG loaded: {ext}")
+                logger.info(f"COG loaded: {ext}")
             except Exception as e:
-                print(f"Failed to load cog: {ext}, Error: {e}")
+                logger.info(f"Failed to load cog: {ext}, Error: {e}")
 
     async def close(self):
         if self.db:
