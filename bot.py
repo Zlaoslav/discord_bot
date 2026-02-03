@@ -73,7 +73,7 @@ class Bot(commands.Bot):
     async def setup_hook(self):
         # --- БД ---
         self.db = DB()
-        self.db.init_db()
+        await self.db.init_db()
         await self.db.connect()
 
         # --- автозагрузка всех cog ---
