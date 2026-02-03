@@ -244,6 +244,82 @@ async def reload_changed_cogs(bot: Bot, modules: Set[str],
 
     # все успешно
     return True, None
+RELOAD_ALL_FOLDERS = {"services_folder", "db_folder", "configs_folder"}
+
+def classify_changes(changed_files: list[Path]) -> tuple[set[str], bool]:
+    """
+    Возвращает:
+    - set модулей cog_* которые нужно перезагрузить
+    - bool: требуется ли перезагрузка всех когов
+    """
+    changed_cogs = set()
+    reload_all = False
+
+    for f in changed_files:
+        try:
+            rel = f.relative_to(BASE_DIR)
+        except Exception:
+            continue
+
+        parts = rel.parts
+        if not parts:
+            continue
+
+        if parts[0] in RELOAD_ALL_FOLDERS:
+            reload_all = True
+
+        if parts[0] == "cogs_folder" and f.name.startswith("cog_") and f.suffix == ".py":
+            module = ".".join(rel.with_suffix("").parts)
+            changed_cogs.add(module)
+
+    return changed_cogs, reload_all
+
+
+def list_all_cogs() -> set[str]:
+    cogs_dir = BASE_DIR / "cogs_folder"
+    result = set()
+    for f in cogs_dir.glob("cog_*.py"):
+        result.add(f"cogs_folder.{f.stem}")
+    return result
+async def reload_cogs_with_rollback(bot: Bot, target_cogs: set[str]) -> tuple[bool, str | None]:
+    """
+    Перезагружает указанные коги.
+    Возвращает (успех, имя упавшего coga)
+    """
+    loaded_before = set(bot.extensions.keys())
+    loaded_new = set()
+
+    for cog in target_cogs:
+        try:
+            if cog in bot.extensions:
+                await bot.reload_extension(cog)
+            else:
+                await bot.load_extension(cog)
+                loaded_new.add(cog)
+        except Exception as e:
+            logger.exception(f"Ошибка загрузки {cog}: {e}")
+
+            # откат runtime-состояния
+            for m in loaded_new:
+                try:
+                    if m in bot.extensions:
+                        await bot.unload_extension(m)
+                except Exception:
+                    pass
+
+            for m in target_cogs:
+                if m in loaded_before:
+                    try:
+                        if m in bot.extensions:
+                            await bot.reload_extension(m)
+                        else:
+                            await bot.load_extension(m)
+                    except Exception:
+                        pass
+
+            return False, cog
+
+    return True, None
 
 # -----------------------
 # Команда и Cog
@@ -379,138 +455,70 @@ class root(commands.Cog):
     # Основная команда updatebot с selective reload + rollback
     # -----------------------
     @commands.command(name="updatebot")
-    async def updatebot(
-        self,
-        ctx: commands.Context
-    ):
+    async def updatebot(self, ctx: commands.Context):
         if not perms_manager.has_perm(ctx.author.id, perms_manager.PermRole.HOST):
-            await ctx.send("У вас нет прав для этой команды.")
+            await ctx.send("У вас нет прав.")
             return
 
-        msg = await ctx.send("🔄 Проверка и обновление репозитория...")
+        msg = await ctx.send("🔄 Проверка обновлений...")
 
-        # 1) запомним текущий коммит
-        try:
-            cp_before = run_cmd("git", "-C", str(BASE_DIR), "rev-parse", "HEAD", cwd=BASE_DIR, check=True)
-            before = cp_before.stdout.decode().strip()
-        except subprocess.CalledProcessError:
-            await msg.edit(content="❌ Не удалось определить текущий коммит (git rev-parse HEAD)")
-            return
+        before = run_cmd(
+            "git", "-C", str(BASE_DIR), "rev-parse", "HEAD",
+            cwd=BASE_DIR
+        ).stdout.decode().strip()
 
-        # 2) делаем обновление (fetch + reset)
-        try:
-            ok = git_update()
-        except Exception as e:
-            logger.exception(e)
-            ok = False
-
-        if not ok:
+        if not git_update():
             await msg.edit(content="❌ Ошибка git обновления")
             return
 
-        # 3) определим новый коммит
-        try:
-            cp_after = run_cmd("git", "-C", str(BASE_DIR), "rev-parse", "HEAD", cwd=BASE_DIR, check=True)
-            after = cp_after.stdout.decode().strip()
-        except subprocess.CalledProcessError:
-            await msg.edit(content="❌ Не удалось получить новый коммит после обновления")
-            return
+        after = run_cmd(
+            "git", "-C", str(BASE_DIR), "rev-parse", "HEAD",
+           cwd=BASE_DIR
+       ).stdout.decode().strip()
 
         if before == after:
-            await msg.edit(content="ℹ️ Обновлений нет (коммиты совпадают).")
+           await msg.edit(content="ℹ️ Обновлений нет")
+           return
+
+        changed_files = get_changed_files(before, after)
+        changed_cogs, reload_all = classify_changes(changed_files)
+
+        if reload_all:
+            target_cogs = list_all_cogs()
+        else:
+            target_cogs = changed_cogs
+
+        if not target_cogs:
+            await msg.edit(content="ℹ️ Изменения не затрагивают коги")
             return
 
-        # 4) какие файлы изменились
-        try:
-            changed_files = get_changed_files(before, after)
-        except subprocess.CalledProcessError as e:
-            logger.exception(e)
-            await msg.edit(content="❌ Ошибка при определении изменённых файлов")
-            # сделаем попытку отката на всякий случай
+        await msg.edit(content="♻️ Перезагрузка когов...")
+
+        ok, failed = await reload_cogs_with_rollback(self.bot, target_cogs)
+
+        if not ok:
             rollback_to_commit(before)
+            await msg.edit(
+                content=f"❌ Ошибка загрузки `{failed}`.\n"
+                       f"Выполнен rollback к предыдущей версии."
+            )
             return
 
-        if not changed_files:
-            await msg.edit(content="ℹ️ Обновлений нет (diff пуст).")
-            return
+        await self.bot.tree.sync()
 
-        # 5) отфильтруем коги
-        changed_cogs = changed_cogs_from_files(changed_files)
-        non_cog_changes = [f for f in changed_files if not ("cogs_folder" in f.relative_to(BASE_DIR).parts if f.exists() or True else False) or (f not in changed_files and True)]
+        files_list = "\n".join(f"- `{f.relative_to(BASE_DIR)}`" for f in changed_files)
+        cogs_list = "\n".join(f"- `{c}`" for c in sorted(target_cogs))
 
-        # simpler check: если есть изменения вне папки cogs_folder -> потребуем рестарт
-        non_cog_changes = [f for f in changed_files if "cogs_folder" not in f.relative_to(BASE_DIR).parts]
+        await msg.edit(
+            content=(
+                "✅ Обновление успешно\n\n"
+                "**Обновлённые файлы:**\n"
+                f"{files_list}\n\n"
+                "**Перезагруженные коги:**\n"
+                f"{cogs_list}"
+            )
+        )
 
-        if non_cog_changes:
-            # для безопасности откатываемся обратно (чтобы не оставить рабочую версию в неконсистентном состоянии)
-            rollback_to_commit(before)
-            non_cog_list = "\n".join(f"- {str(f.relative_to(BASE_DIR))}" for f in non_cog_changes[:10])
-            await msg.edit(content=(
-                "⚠️ Обновлены файлы вне папки cogs_folder. Горячая перезагрузка невозможна.\n"
-                "Репозиторий откатан к предыдущему коммиту. Пожалуйста, выполните полный перезапуск процесса (restart).\n\n"
-                f"Примеры изменённых файлов:\n{non_cog_list}"
-            ))
-            return
-
-        if not changed_cogs:
-            await msg.edit(content="ℹ️ В обновлении нет изменений в cogs. Нечего перезагружать.")
-            return
-
-        # 6) сделаем бекап старых версий файлов (из before) для возможности восстановления и для логов
-        try:
-            backup_dir = backup_cog_files_from_git(before, [p for p in changed_files if "cogs_folder" in p.relative_to(BASE_DIR).parts])
-        except Exception as e:
-            logger.exception(e)
-            await msg.edit(content="❌ Ошибка создания бэкапа старых версий когов. Откат.")
-            rollback_to_commit(before)
-            return
-
-        # 7) подготовим информацию о том, какие модули были загружены до обновления
-        prev_loaded = set()
-        for module in changed_cogs:
-            if module in self.bot.extensions:
-                prev_loaded.add(module)
-
-        # 8) попробуем загрузить/перезагрузить только изменившиеся коги
-        await msg.edit(content="♻️ Перезагрузка обновлённых когов...")
-        ok_reload, failed_module = await reload_changed_cogs(self.bot, changed_cogs, prev_loaded)
-
-        if not ok_reload:
-            # ошибка загрузки — откатываем репозиторий к before
-            logger.error(f"Ошибка загрузки модуля {failed_module}, выполняем откат к {before}")
-            rollback_success = rollback_to_commit(before)
-            if not rollback_success:
-                await msg.edit(content="❌ Ошибка загрузки cog и отката репозитория — требуется ручное вмешательство. Смотри логи.")
-                return
-
-            # после отката — восстановим состояние расширений: перезагрузим те, которые были до обновления,
-            # и выгрузим те, которых не было.
-            for module in changed_cogs:
-                try:
-                    if module in prev_loaded:
-                        # перезагрузить старую версию
-                        if module in self.bot.extensions:
-                            await self.bot.reload_extension(module)
-                        else:
-                            await self.bot.load_extension(module)
-                    else:
-                        # модуль не был загружен до обновления — убедиться, что он не загружен
-                        if module in self.bot.extensions:
-                            await self.bot.unload_extension(module)
-                except Exception as e:
-                    logger.exception(f"После rollback не удалось восстановить состояние для {module}: {e}")
-
-            await msg.edit(content=f"❌ Не удалось загрузить `{failed_module}`. Выполнен откат к предыдущему состоянию. Смотри логи.")
-            return
-
-        # 9) все успешно — синхронизируем tree если нужно и ответим
-        try:
-            await self.bot.tree.sync()
-        except Exception:
-            logger.exception("Ошибка при sync app_commands")
-
-        reloaded_list = "\n".join(f"- `{m}`" for m in sorted(changed_cogs))
-        await msg.edit(content=f"✅ Успешно обновлены и перезагружены коги:\n{reloaded_list}\nБэкап старых версий в `.cog_backups/{before}/`")
 
 async def setup(bot: Bot):
     await bot.add_cog(root(bot))
