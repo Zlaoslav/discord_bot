@@ -14,7 +14,8 @@ class AnnouncementsRepository:
 
         await self.db.execute(
             f"""
-                INSERT INTO {self.__TABLE} (channel_id = ?)
+                INSERT INTO {self.__TABLE}
+                WHERE channel_id = ?
                 ON CONFLICT (channel_id) DO NOTHING
             """,
             (channel_id,)
