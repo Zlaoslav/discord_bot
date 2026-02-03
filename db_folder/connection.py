@@ -17,7 +17,10 @@ class Database:
         await self.db.execute("PRAGMA foreign_keys = ON;")
 
     async def close(self):
-        await self.db.close()
+        if self.db is not None:
+            await self.db.close()
+            self.db = None
+
 
         
 async def init_db():
