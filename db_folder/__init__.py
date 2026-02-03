@@ -13,6 +13,7 @@ from .db_join_leave import JoinLeaveRepository
 from .db_role_reactions import RoleReactionsRepository
 from .db_counting import CountingRepository
 from .db_restart_state import RestartStateRepository
+from .db_announcements import AnnouncementsRepository
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "bot_state.db")
 
@@ -27,7 +28,7 @@ class DB:
     role_reactions: RoleReactionsRepository
     counting: CountingRepository
     restart_state: RestartStateRepository
-
+    auto_announcements: AnnouncementsRepository
     def __init__(self):
         self.database = Database(DB_PATH)
 
@@ -43,6 +44,7 @@ class DB:
         self.role_reactions = RoleReactionsRepository(db)
         self.counting = CountingRepository(db)
         self.restart_state = RestartStateRepository(db)
+        self.auto_announcements = AnnouncementsRepository(db)
         
     def init_db(self):
         init_db()
