@@ -55,6 +55,9 @@ class announcements(commands.Cog):
         self,
         message: discord.Message
     ):
+        if message.channel.guild == None:
+            return
+        
         if not message.channel.is_news():
             return
         

@@ -20,10 +20,6 @@ class Askgpt(commands.Cog):
     ):
         await interaction.response.defer()
 
-        if interaction.guild is None:
-            await interaction.followup.send("Эта команда работает только на сервере.", ephemeral=False)
-            return
-
         # OWNER и HOST игнорируют лимит
         is_privileged = hlpr_perms_manager.has_perm(interaction.user.id, hlpr_perms_manager.PermRole.OWNER) or hlpr_perms_manager.has_perm(interaction.user.id, hlpr_perms_manager.PermRole.HOST)
 

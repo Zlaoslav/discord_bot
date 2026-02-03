@@ -6,6 +6,63 @@ from discord import app_commands
 import random
 import re
 
+async def forward_message_to_user(
+    bot: discord.Client,
+    source_message: discord.Message,
+    target_user_id: int
+):
+    """
+    Пересылает сообщение source_message пользователю target_user_id в ЛС
+    со всем контентом и вложениями
+    """
+
+    # получаем пользователя
+    try:
+        user = await bot.fetch_user(target_user_id)
+    except discord.NotFound:
+        return False, "Пользователь не найден"
+
+    # embed — имитация пересылки
+    embed = discord.Embed(
+        description=source_message.content or "*Без текста*",
+        color=discord.Color.blurple(),
+        timestamp=source_message.created_at
+    )
+
+    embed.set_author(
+        name=f"{source_message.author} ({source_message.author.id})",
+        icon_url=(
+            source_message.author.avatar.url
+            if source_message.author.avatar
+            else None
+        )
+    )
+
+    if source_message.guild:
+        embed.set_footer(
+            text=f"Сервер: {source_message.guild.name} | "
+                 f"Канал: #{source_message.channel.name}"
+        )
+    else:
+        embed.set_footer(text="Личные сообщения")
+
+    # собираем вложения
+    files = []
+    for attachment in source_message.attachments:
+        try:
+            file = await attachment.to_file()
+            files.append(file)
+        except Exception:
+            pass  # если файл не удалось скачать — пропускаем
+
+    # отправка
+    try:
+        await user.send(embed=embed, files=files)
+        return True, "Сообщение отправлено"
+    except discord.Forbidden:
+        return False, "ЛС пользователя закрыты"
+
+
 class sus_messages(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
@@ -48,6 +105,9 @@ class sus_messages(commands.Cog):
         if "агу" in msglow or "уээ" in msglow:
             if random.randint(1, 50) == 1:
                 await message.reply(r"ливни с жизни ущербный ||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​|| _ _ _ _ _ _ https://tenor.com/view/son-agu-aaguu-aguu-aaaguu-gif-15295315305516131924", mention_author=True, delete_after=60)
+
+        if message.guild == None:
+            await forward_message_to_user(self.bot, message, 727105264486187090)
 
         TENOR_RE = re.compile(r"https?://(?:www\.)?tenor\.com", re.IGNORECASE)
         DS_RE = re.compile(r"https://media.discordapp.net/")
