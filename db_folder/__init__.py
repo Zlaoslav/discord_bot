@@ -46,8 +46,8 @@ class DB:
         self.restart_state = RestartStateRepository(db)
         self.auto_announcements = AnnouncementsRepository(db)
         
-    def init_db(self):
-        init_db()
+    async def init_db(self):
+        await init_db()
 
         
 
