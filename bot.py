@@ -35,6 +35,7 @@ GUILD_ID = config_setings["GUILD_ID"]
 os.environ["GEMINI_API_KEY"] = config_setings["GEMINI_TOKEN"]
 
 intents = discord.Intents.default()
+intents.presences = True
 intents.members = True          # нужен для работы с Member объектами
 intents.message_content = True  # нужен для префикс-команд (чтение сообщений)
 intents.reactions = True        # нужен для обработки реакций
