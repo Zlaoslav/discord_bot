@@ -3,6 +3,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 
+import services_folder.hlpr_timestamps as timestaps
 import random
 import re
 
@@ -66,6 +67,8 @@ async def forward_message_to_user(
 class sus_messages(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
+        self.slavi_guild = self.bot.get_guild(1255059241358721137)
+        self.slavi_member = self.slavi_guild.get_member(727105264486187090)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -74,12 +77,13 @@ class sus_messages(commands.Cog):
 
         msglow = message.content.lower()
 
+        # айдишник оркена
         if 759310706343542854 == message.author.id:
             if random.randint(1, 50) == 1:
                 await message.reply(r"сука НЕ ПИНГУЙ ЕВРИВАН МНЕ БОЛЬШЕ ЗАЕБАЫФЛАЫФАФЫВОФГВ", mention_author=True, delete_after=30)
         
+        # айдишник бота
         if "<@1409084528588488727>" in msglow:
-            # reply автоматически упомянет автора (mention_author=True по умолчанию)
             await message.reply(r"<:realbot:1437494993248850052>\nhttps://tenor.com/view/fuck-you-gif-27037587", mention_author=True, delete_after=10)
 
         if "осуждаю" in msglow:
@@ -104,7 +108,17 @@ class sus_messages(commands.Cog):
 
         if "агу" in msglow or "уээ" in msglow:
             if random.randint(1, 50) == 1:
-                await message.reply(r"ливни с жизни ущербный ||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​||||​|| _ _ _ _ _ _ https://tenor.com/view/son-agu-aaguu-aguu-aaaguu-gif-15295315305516131924", mention_author=True, delete_after=60)
+                await message.reply(r"ливни с жизни ущербный https://tenor.com/view/son-agu-aaguu-aguu-aaaguu-gif-15295315305516131924", mention_author=True, delete_after=60)
+        
+        if "эщкере" in msglow:
+            if random.randint(1, 50) == 1:
+                await message.reply(r"https://klipy.com/gifs/pearto-teto")
+
+        # мой айдишник
+        if self.slavi_member in message.mentions:
+            if self.slavi_member.status == discord.Status.offline:
+                await message.reply(f"Славик не в сети! Я его виртуальный помощник, прошу тебя написать всё что хочешь от него, как только он вернётся я напомню ему о сообщении от {message.author.mention} \n Это сообщение будет удалено {timestaps.in_seconds(60)}", delete_after=60)
+
 
         if message.guild == None:
             await forward_message_to_user(self.bot, message, 727105264486187090)
