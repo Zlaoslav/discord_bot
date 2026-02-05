@@ -94,11 +94,11 @@ class Bot(commands.Bot):
                 continue
 
             ext = f"cogs_folder.{file[:-3]}"
-            
+
             try:
                 await self.load_extension(ext)
                 logger.info(f"COG loaded: {ext}")
-                cogs_count += 1
+                loaded_cogs_count += 1
             except Exception as e:
                 logger.info(f"Failed to load cog: {ext}, Error: {e}")
                 error_cogs_count += 1
