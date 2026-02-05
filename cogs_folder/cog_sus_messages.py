@@ -116,7 +116,7 @@ class sus_messages(commands.Cog):
 
         # мой айдишник
         if self.slavi_member in message.mentions:
-            if self.slavi_member.status == discord.Status.offline:
+            if self.slavi_member.status != discord.Status.online:
                 await message.reply(f"**Славик не в сети!**\nЯ его виртуальный помощник, прошу тебя написать всё что хочешь от него, как только он вернётся я напомню ему о сообщении от {message.author.mention}\n__Это сообщение будет удалено {timestaps.in_seconds(60)}__", delete_after=60)
 
 
