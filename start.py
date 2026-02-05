@@ -1,6 +1,6 @@
 from __future__ import annotations
 from async_console import AsyncConsole
-
+from configs_folder.advanced_settings import REPO_URL, MAIN_SERVER_NAME
 console = AsyncConsole()
 console.start()
 import os
@@ -13,7 +13,6 @@ from typing import Optional
 
 CURRENT_DIR = Path(__file__).parent.resolve()
 BOT_FILE = CURRENT_DIR / "bot.py"
-REPO_URL = "https://github.com/Zlaoslav/discord_bot"
 REQUIREMENTS = CURRENT_DIR / "requirements.txt"
 
 def find_git_root(start: Path) -> Optional[Path]:
@@ -350,6 +349,8 @@ MAIN_THREAD_ID = None
 
 USERNAME = os.getenv("USERNAME") or "unknown"
 HOSTNAME = socket.gethostname()
+if HOSTNAME == MAIN_SERVER_NAME:
+    USERNAME = "trusted server"
 starttime = time.time()
 
 def install_requirements():

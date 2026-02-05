@@ -84,19 +84,30 @@ class Bot(commands.Bot):
 
     async def _load_all_cogs(self):
         base_path = os.path.join(os.path.dirname(__file__), "cogs_folder")
+        loaded_cogs_count = 0
+        error_cogs_count = 0
+        ext = f"cogs_folder.{file[:-3]}"
 
         for file in os.listdir(base_path):
             if not file.endswith(".py"):
                 continue
-            if file.startswith("_"):
+            if not file.startswith("cog_"):
                 continue
-
-            ext = f"cogs_folder.{file[:-3]}"
+            
             try:
                 await self.load_extension(ext)
                 logger.info(f"COG loaded: {ext}")
+                cogs_count += 1
             except Exception as e:
                 logger.info(f"Failed to load cog: {ext}, Error: {e}")
+                error_cogs_count += 1
+        
+        if error_cogs_count == 0:
+            logger.info(f"All сogs loaded successfully ({loaded_cogs_count})")
+        else:
+            logger.warning(f"Only {loaded_cogs_count}/{loaded_cogs_count + error_cogs_count} cogs have been loaded.")
+
+
 
     async def close(self):
         if self.db:
