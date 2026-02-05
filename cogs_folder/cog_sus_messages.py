@@ -67,8 +67,8 @@ async def forward_message_to_user(
 class sus_messages(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
-        self.slavi_guild = self.bot.get_guild(1255059241358721137)
-        self.slavi_member = self.slavi_guild.get_member(727105264486187090)
+        self.slavi_guild = None
+        self.slavi_member = None
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -147,7 +147,12 @@ class sus_messages(commands.Cog):
                     "https://tenor.com/view/no-gif-no-gif-perms-gif-27679658",
                     mention_author=True
                     )
-
+                
+    @commands.Cog.listener()
+    async def on_ready(self):
+        self.slavi_guild = self.bot.get_guild(1255059241358721137)
+        if self.slavi_guild:
+            self.slavi_member = self.slavi_guild.get_member(727105264486187090)
 
 async def setup(bot: Bot):
     await bot.add_cog(sus_messages(bot))
