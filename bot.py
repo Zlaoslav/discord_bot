@@ -86,13 +86,14 @@ class Bot(commands.Bot):
         base_path = os.path.join(os.path.dirname(__file__), "cogs_folder")
         loaded_cogs_count = 0
         error_cogs_count = 0
-        ext = f"cogs_folder.{file[:-3]}"
 
         for file in os.listdir(base_path):
             if not file.endswith(".py"):
                 continue
             if not file.startswith("cog_"):
                 continue
+
+            ext = f"cogs_folder.{file[:-3]}"
             
             try:
                 await self.load_extension(ext)
