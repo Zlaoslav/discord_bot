@@ -115,7 +115,7 @@ class other_slash_cmds(commands.Cog):
         delete_days: int
     ):
         
-        if not interaction.user.guild_permissions.ban_members and not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.T):
+        if not interaction.user.guild_permissions.ban_members and not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.HOST):
             return await interaction.response.send_message("У вас нет прав на бан.", ephemeral=True)
 
 

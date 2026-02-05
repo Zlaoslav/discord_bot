@@ -85,7 +85,7 @@ class level_xp(commands.Cog):
         payload: discord.RawReactionActionEvent
         ):
         
-        if payload.guild_id is None:
+        if not payload.guild_id:
             return  # это DM, игнорируем
 
         # Проверка: автор не бот
@@ -110,7 +110,8 @@ class level_xp(commands.Cog):
     ):
         if message.author.bot:
             return  # реакция от бота, игнорируем
-        
+        if not message.guild:
+            return
         await try_give_xp(self.bot, message.guild.id, message.author.id)
         
 

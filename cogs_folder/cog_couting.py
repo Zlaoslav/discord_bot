@@ -117,7 +117,8 @@ class counting(commands.Cog):
     # игнорируем ботов
         if message.author.bot:
             return
-
+        if not message.guild:
+            return
         # получаем состояние единственного счётчика
         row = await self.bot.db.counting.get_counter_state(message.guild.id)
         if row is None:
