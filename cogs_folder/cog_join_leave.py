@@ -79,7 +79,7 @@ class join_leave(commands.Cog):
         created_at = member.created_at  # datetime (UTC)
         now = datetime.now(timezone.utc)
 
-        age_days = (now - created_at).days or "unknown"
+        age_days = str((now - created_at).days) + "d" or "unknown"
 
         if role_id:
             await channel.send(
