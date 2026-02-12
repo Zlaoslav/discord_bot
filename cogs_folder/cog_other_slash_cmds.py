@@ -5,7 +5,7 @@ from discord import app_commands
 import services_folder.hlpr_perms_manager as perms_manager
 from services_folder.hlpr_logging import logger
 from configs_folder.advanced_settings import BOT_COMMANDS_LIST
-from services_folder.hlpr_send_long import _send_long_followup
+from services_folder.hlpr_send_long import send_long_followup
 
 class other_slash_cmds(commands.Cog):
     def __init__(self, bot: Bot):
@@ -60,7 +60,7 @@ class other_slash_cmds(commands.Cog):
         """Отправляет полный список команд, разбитый на сообщения при необходимости."""
         await interaction.response.defer(ephemeral=False)
         text = BOT_COMMANDS_LIST.strip()
-        await _send_long_followup(interaction, text)
+        await send_long_followup(interaction, text)
 
 
     @app_commands.command(

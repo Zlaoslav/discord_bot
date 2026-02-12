@@ -475,7 +475,11 @@ class root(commands.Cog):
             "git", "-C", str(BASE_DIR), "rev-parse", "HEAD",
            cwd=BASE_DIR
        ).stdout.decode().strip()
-
+        
+        if before is None or after is None:
+            await msg.edit(content="⚠️ Критическая ошибка обновления")
+            return
+        
         if before == after:
            await msg.edit(content="ℹ️ Обновлений нет")
            return
@@ -516,8 +520,8 @@ class root(commands.Cog):
         
         await msg.edit(
             content=(
-                "✅ Обновление успешно"
-                f"**HEAD now at:** `{after}` — {commit_message}\n\n"
+                "✅ Обновление успешно\n"
+                f"-# **HEAD now at:** `{after[0:6]}` — {commit_message}\n\n"
                 "**Обновлённые файлы:**\n"
                 f"{files_list}\n\n"
                 "**Перезагруженные коги:**\n"

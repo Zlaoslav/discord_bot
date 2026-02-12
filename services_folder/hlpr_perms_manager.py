@@ -70,7 +70,11 @@ INDEPENDENT_ROLES = {
 ALL_ROLES = set(PermRole)
 
 # Роли, которые нельзя менять ни при каких условиях
-PROTECTED_ROLES = {PermRole.HOST, PermRole.OWNER, PermRole.PERMSMANAGER}
+PROTECTED_ROLES = {
+    PermRole.HOST,
+    PermRole.OWNER,
+    PermRole.PERMSMANAGER
+}
 
 
 def _load_perms() -> Dict[int, Set[PermRole]]:

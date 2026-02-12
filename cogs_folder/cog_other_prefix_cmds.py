@@ -3,7 +3,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import services_folder.hlpr_perms_manager as perms_manager
-from services_folder.hlpr_send_long import _send_long_ctx
+from services_folder.hlpr_send_long import send_long_ctx
 from configs_folder.advanced_settings import BOT_COMMANDS_LIST, CODEVERSION, START_TIME, HOSTNAME, USERNAME
 from services_folder.srv_cmds_manager import sync_local_slash, clear_local_slash
 import time
@@ -41,7 +41,7 @@ class other_prefix_cmds(commands.Cog):
     async def help_prefix(self, ctx: commands.Context):
         """Показать справку по командам (префиксная команда)."""
         text = BOT_COMMANDS_LIST.strip()
-        await _send_long_ctx(ctx, text)
+        await send_long_ctx(ctx, text)
 
     @commands.command(name="disablecmds")
     async def disablecmds(self, ctx: commands.Context):
