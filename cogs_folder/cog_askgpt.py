@@ -5,9 +5,13 @@ from discord import app_commands
 from services_folder.srv_daily_requests import get_remaining_requests, increment_user_daily_count, ask_gemini, DAILY_REQUEST_LIMIT
 import services_folder.hlpr_perms_manager as hlpr_perms_manager
 from services_folder.hlpr_logging import logger
+
+import time
 class Askgpt(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
+        self.USER_COOLDOWNS = {}
+        self.COOLDOWN_SECONDS = 30
 
     @app_commands.command(
         name="askgpt",
@@ -16,9 +20,26 @@ class Askgpt(commands.Cog):
     async def askgpt(
         self,
         interaction: discord.Interaction,
-    usermessage: str
+        usermessage: str
     ):
+        now = time.time()
+        # Обновляем кулдаун
+        self.USER_COOLDOWNS[interaction.user.id] = now
+        last_used = self.USER_COOLDOWNS.get(interaction.user.id)
+
         await interaction.response.defer()
+        now = time.time()
+
+        if last_used:
+            remaining = self.COOLDOWN_SECONDS - (now - last_used)
+            if remaining > 0:
+                await interaction.response.send_message(
+                    f"⏳ Подожди ещё **{int(remaining)} сек.** перед повторным использованием.",
+                    ephemeral=True,
+                    delete_after=remaining
+                )
+                return
+
 
         # OWNER и HOST игнорируют лимит
         is_privileged = hlpr_perms_manager.has_perm(interaction.user.id, hlpr_perms_manager.PermRole.OWNER) or hlpr_perms_manager.has_perm(interaction.user.id, hlpr_perms_manager.PermRole.HOST)
