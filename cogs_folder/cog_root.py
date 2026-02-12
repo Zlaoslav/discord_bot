@@ -509,9 +509,15 @@ class root(commands.Cog):
         files_list = "\n".join(f"- `{f.relative_to(BASE_DIR)}`" for f in changed_files)
         cogs_list = "\n".join(f"- `{c}`" for c in sorted(target_cogs))
 
+        commit_message = run_cmd(
+            "git", "-C", str(BASE_DIR), "log", "-1", "--pretty=%s", after,
+            cwd=BASE_DIR
+        ).stdout.decode().strip()
+        
         await msg.edit(
             content=(
-                "✅ Обновление успешно\n\n"
+                "✅ Обновление успешно"
+                f"**HEAD now at:** `{after}` — {commit_message}\n\n"
                 "**Обновлённые файлы:**\n"
                 f"{files_list}\n\n"
                 "**Перезагруженные коги:**\n"
