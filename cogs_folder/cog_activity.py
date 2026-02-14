@@ -1,10 +1,11 @@
 from bot import Bot
 import discord
 from discord.ext import commands
-from discord import app_commands, Forbidden
+from discord import app_commands
 import services_folder.hlpr_perms_manager as perms_manager
 
 from typing import Optional
+
 
 class ActivityModal(discord.ui.Modal):
     def __init__(self, bot: commands.Bot, activity_type: str, status_str: str):
@@ -105,9 +106,10 @@ class AdminActivityView(discord.ui.View):
         ]
     )
     async def activity_select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.activity_choice = select.values[0]  # теперь select правильно передается
+        # Первый аргумент — interaction, второй — select
+        self.activity_choice = select.values[0]
+        # Можно дать обратную связь (defer), но не обязательно
         await interaction.response.defer(ephemeral=True)
-
 
     # Select для статуса
     @discord.ui.select(
@@ -127,18 +129,19 @@ class AdminActivityView(discord.ui.View):
 
     # Кнопка Подтвердить
     @discord.ui.button(label="Подтвердить", style=discord.ButtonStyle.success)
-    async def confirm(self, button: discord.ui.Button, interaction: discord.Interaction):
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Открываем модальное окно для ввода текста (и URL для стрима, если нужно)
         modal = ActivityModal(
             bot=self.bot,
             activity_type=self.activity_choice,
             status_str=self.status_choice
         )
+        # Теперь interaction — действительно Interaction, можно отправить modal
         await interaction.response.send_modal(modal)
 
     # Кнопка Отмена
     @discord.ui.button(label="Отмена", style=discord.ButtonStyle.secondary)
-    async def cancel(self, button: discord.ui.Button, interaction: discord.Interaction):
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message("Операция отменена.", ephemeral=True)
         self.stop()
 
