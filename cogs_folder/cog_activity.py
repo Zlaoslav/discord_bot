@@ -104,9 +104,10 @@ class AdminActivityView(discord.ui.View):
             discord.SelectOption(label="Соревнуется", value="competing", description="Competing / соревнуется")
         ]
     )
-    async def activity_select(self, select: discord.ui.Select, interaction: discord.Interaction):
-        self.activity_choice = select.values[0]
+    async def activity_select(self, interaction: discord.Interaction, select: discord.ui.Select):
+        self.activity_choice = select.values[0]  # теперь select правильно передается
         await interaction.response.defer(ephemeral=True)
+
 
     # Select для статуса
     @discord.ui.select(
@@ -120,7 +121,7 @@ class AdminActivityView(discord.ui.View):
             discord.SelectOption(label="invisible", value="invisible", description="Скрыт")
         ]
     )
-    async def status_select(self, select: discord.ui.Select, interaction: discord.Interaction):
+    async def status_select(self, interaction: discord.Interaction, select: discord.ui.Select):
         self.status_choice = select.values[0]
         await interaction.response.defer(ephemeral=True)
 
