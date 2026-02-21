@@ -120,6 +120,7 @@ class Bot(commands.Bot):
 def main():
     bot = Bot()
     bot.run(DISCORD_TOKEN)
+    import api
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 from bot import Bot
 import discord
 from discord.ext import commands
-from discord import app_commands, Forbidden
+from discord import app_commands, Forbidden, VoiceChannel
 import services_folder.hlpr_perms_manager as perms_manager
 
 class announcements(commands.Cog):
@@ -56,6 +56,9 @@ class announcements(commands.Cog):
         message: discord.Message
     ):
         if message.channel.guild == None:
+            return
+        
+        if message.channel.type == VoiceChannel:
             return
         
         if not message.channel.is_news():
