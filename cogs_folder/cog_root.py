@@ -385,6 +385,9 @@ class root(commands.Cog):
             interaction.followup.send("ROOT или RESTART_STATE нельзя выключать!")
             return
 
+        if cog_name == "site_root":
+            interaction.followup.send("**Внимание!**\n отключён критический cog для работы сайта")
+        
         try:
             await self.bot.unload_extension(f"cogs_folder.cog_{cog_name}")
             await interaction.followup.send(f"cogs_folder.cog_{cog_name} успешно выключен!")
@@ -405,7 +408,10 @@ class root(commands.Cog):
         if cog_name == "root" or cog_name == "restart_state":
             ctx.send("ROOT или RESTART_STATE нельзя выключать!")
             return
-
+        
+        if cog_name == "site_root":
+            ctx.send("**Внимание!**\n отключён критический cog для работы сайта")
+        
         try:
             await self.bot.unload_extension(f"cogs_folder.cog_{cog_name}")
             await ctx.send(f"cogs_folder.cog_{cog_name} успешно выключен!")
@@ -521,7 +527,7 @@ class root(commands.Cog):
         await msg.edit(
             content=(
                 "✅ Обновление успешно\n"
-                f"-# **HEAD now at:** `{after[0:6]}` — {commit_message}\n\n"
+                f"-# **HEAD is now at:** `{after[0:6]}` — {commit_message}\n\n"
                 "**Обновлённые файлы:**\n"
                 f"{files_list}\n\n"
                 "**Перезагруженные коги:**\n"

@@ -24,11 +24,12 @@ class Askgpt(commands.Cog):
     ):
         await interaction.response.defer()
 
+        is_privileged = hlpr_perms_manager.has_perm(interaction.user.id, hlpr_perms_manager.PermRole.OWNER) or hlpr_perms_manager.has_perm(interaction.user.id, hlpr_perms_manager.PermRole.HOST)
 
         now = time.time()
         last_used = self.USER_COOLDOWNS.get(interaction.user.id)
 
-        if last_used:
+        if last_used and not is_privileged:
             remaining = self.COOLDOWN_SECONDS - (now - last_used)
             if remaining > 0:
                 await interaction.followup.send(
@@ -37,12 +38,11 @@ class Askgpt(commands.Cog):
                 )
                 return
 
-    # только после проверки обновляем
         self.USER_COOLDOWNS[interaction.user.id] = now
 
 
         # OWNER и HOST игнорируют лимит
-        is_privileged = hlpr_perms_manager.has_perm(interaction.user.id, hlpr_perms_manager.PermRole.OWNER) or hlpr_perms_manager.has_perm(interaction.user.id, hlpr_perms_manager.PermRole.HOST)
+        
 
         if not is_privileged:
             remaining = await get_remaining_requests(self.bot, interaction.user.id)

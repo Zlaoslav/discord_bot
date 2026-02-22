@@ -35,6 +35,7 @@ GUILD_ID = config_setings["GUILD_ID"]
 os.environ["GEMINI_API_KEY"] = config_setings["GEMINI_TOKEN"]
 
 intents = discord.Intents.default()
+intents.guilds = True           # нужен для доступа к информации о гильдиях
 intents.presences = True        # нужен для работы с статусом участников
 intents.members = True          # нужен для работы с Member объектами
 intents.message_content = True  # нужен для префикс-команд (чтение сообщений)
@@ -120,7 +121,6 @@ class Bot(commands.Bot):
 def main():
     bot = Bot()
     bot.run(DISCORD_TOKEN)
-    import api
 
 
 if __name__ == "__main__":

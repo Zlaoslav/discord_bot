@@ -2,7 +2,7 @@ import os
 import aiosqlite
 from typing import Self
 
-from .connection import Database, init_db
+from ._connection import Database, init_db
 from .db_daily_requests import DailyRequestsRepository
 from .db_level_rewards import LevelRewardsRepository
 from .db_level_users import LevelUsersRepository
