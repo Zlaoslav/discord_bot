@@ -11,7 +11,7 @@ class Askgpt(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
         self.USER_COOLDOWNS = {}
-        self.COOLDOWN_SECONDS = 15
+        self.COOLDOWN_SECONDS = 20
 
     @app_commands.command(
         name="askgpt",
@@ -22,11 +22,6 @@ class Askgpt(commands.Cog):
         interaction: discord.Interaction,
         usermessage: str
     ):
-        now = time.time()
-        # Обновляем кулдаун
-        self.USER_COOLDOWNS[interaction.user.id] = now
-        last_used = self.USER_COOLDOWNS.get(interaction.user.id)
-
         await interaction.response.defer()
 
 
@@ -36,7 +31,7 @@ class Askgpt(commands.Cog):
         if last_used:
             remaining = self.COOLDOWN_SECONDS - (now - last_used)
             if remaining > 0:
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     f"⏳ Подожди ещё **{int(remaining)} сек.** перед повторным использованием.",
                     ephemeral=True
                 )
