@@ -30,7 +30,7 @@ class announcements(commands.Cog):
             await interaction.response.send_message("У бота недостаточно прав! (выдайте боту право управлять сообщениями)")
             return
     
-        await self.bot.db.auto_announcements.add(channel.id)
+        await self.bot.db.auto_announcements.add(channel.guild.id, channel.id)
         await interaction.response.send_message(f"В канале {channel.name} успешно включена автопубликация сообщений")
 
     @app_commands.command(
@@ -46,7 +46,7 @@ class announcements(commands.Cog):
             await interaction.response.send_message("У вас недостаточно прав!")
             return
 
-        await self.bot.db.auto_announcements.delete(channel.id)
+        await self.bot.db.auto_announcements.delete(channel.guild.id, channel.id)
         await interaction.response.send_message(f"В канале {channel.name} успешно выключена автопубликация сообщений")
 
 
@@ -55,23 +55,23 @@ class announcements(commands.Cog):
         self,
         message: discord.Message
     ):
-        if message.channel.guild == None:
-            return
-        
-        if message.channel.type == VoiceChannel:
-            return
-        
-        if not message.channel.is_news():
-            return
-        
-        if not await self.bot.db.auto_announcements.is_auto_announcement(message.channel.id):
-            return
-        
-        perms = message.channel.permissions_for(message.guild.me)
-        if not perms.manage_messages:
-            return
-        
         try:
+            if message.channel.guild == None:
+                return
+        
+            if message.channel.type == VoiceChannel:
+                return
+        
+            if not message.channel.is_news():
+                return
+        
+            if not await self.bot.db.auto_announcements.is_auto_announcement(message.guild.id, message.channel.id):
+                return
+        
+            perms = message.channel.permissions_for(message.guild.me)
+            if not perms.manage_messages:
+                return
+        
             await message.publish()
         except Forbidden:
             await self.bot.db.auto_announcements.delete(message.channel.id)

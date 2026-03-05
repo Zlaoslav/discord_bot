@@ -43,25 +43,8 @@ intents.reactions = True        # нужен для обработки реак�
 intents.voice_states = True     # нужен для отслеживания входа/выхода в войс
 GUILD = discord.Object(id=GUILD_ID)
 
-# Optional hook: apply_guild_config will be called by the embedded web server when a guild config is saved
-async def apply_guild_config(guild_id: int, cfg: dict):
-    """Default stub: override or extend in your bot code to apply configuration immediately."""
-    try:
-        logger.info(f"apply_guild_config called for %s: %s, {guild_id}, {cfg}")
-        # Example: apply some settings — implement as needed
-        # guild = bot.get_guild(guild_id)
-        # if guild and cfg.get('some_setting'):
-        #     ...
-    except Exception:
-        logger.info('apply_guild_config failed')
-
-
-
-
 hlpr_perms_manager.init_perms(OWNER_ID)
 
-
-DB_PATH = os.path.join(os.path.dirname(__file__), "bot_state.db")  # файл базы рядом со скриптом
 
 class Bot(commands.Bot):
     db: DB
@@ -102,13 +85,13 @@ class Bot(commands.Bot):
                 logger.info(f"COG loaded: {ext}")
                 loaded_cogs_count += 1
             except Exception as e:
-                logger.info(f"Failed to load cog: {ext}, Error: {e}")
+                logger.error(f"Failed to load cog: {ext}, Error: {e}")
                 error_cogs_count += 1
         
         if error_cogs_count == 0:
             logger.info(f"All сogs loaded successfully ({loaded_cogs_count})")
         else:
-            logger.warning(f"Only {loaded_cogs_count}/{loaded_cogs_count + error_cogs_count} cogs have been loaded.")
+            logger.critical(f"Only {loaded_cogs_count}/{loaded_cogs_count + error_cogs_count} cogs have been loaded.")
 
 
 

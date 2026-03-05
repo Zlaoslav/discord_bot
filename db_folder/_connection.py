@@ -135,7 +135,9 @@ async def init_db():
             # Таблица auto_announcements
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS auto_announcements (
-                    channel_id INTEGER PRIMARY KEY
+                    guild_id INTEGER NOT NULL,
+                    channel_id INTEGER NOT NULL,
+                    PRIMARY KEY (guild_id, channel_id)
                 );
             """)
 
