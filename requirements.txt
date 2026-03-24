@@ -1,4 +1,5 @@
-discord
+discord.py
+
 playwright
 PyNaCl
 google-genai
