@@ -57,8 +57,8 @@ class announcements(commands.Cog):
     ):
         if message.channel.guild == None:
             return
-        
-        if message.channel.type == VoiceChannel:
+
+        if message.channel.type == discord.ChannelType.voice:
             return
         
         if not message.channel.is_news():

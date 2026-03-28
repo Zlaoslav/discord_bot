@@ -14,7 +14,7 @@ import discord.app_commands
 from db_folder import DB
 
 import services_folder.hlpr_perms_manager as hlpr_perms_manager
-from configs_folder.advanced_settings import OWNER_ID
+from configs_folder.advanced_settings import OWNER_ID, COMMAND_PREFIX
 from services_folder.hlpr_logging import logger
 # ------------------ main vars setup ------------------
 SCRIPT_DIR = Path(__file__).parent
@@ -66,7 +66,7 @@ class Bot(commands.Bot):
     db: DB
     def __init__(self):
         super().__init__(
-            command_prefix="?",
+            command_prefix=COMMAND_PREFIX,
             intents=intents
         )
         self.db: DB
@@ -101,13 +101,13 @@ class Bot(commands.Bot):
                 logger.info(f"COG loaded: {ext}")
                 loaded_cogs_count += 1
             except Exception as e:
-                logger.info(f"Failed to load cog: {ext}, Error: {e}")
+                logger.error(f"Failed to load cog: {ext}, Error: {e}")
                 error_cogs_count += 1
         
         if error_cogs_count == 0:
             logger.info(f"All сogs loaded successfully ({loaded_cogs_count})")
         else:
-            logger.warning(f"Only {loaded_cogs_count}/{loaded_cogs_count + error_cogs_count} cogs have been loaded.")
+            logger.critical(f"Only {loaded_cogs_count}/{loaded_cogs_count + error_cogs_count} cogs have been loaded.")
 
 
 
@@ -120,7 +120,6 @@ class Bot(commands.Bot):
 def main():
     bot = Bot()
     bot.run(DISCORD_TOKEN)
-    import api
 
 
 if __name__ == "__main__":

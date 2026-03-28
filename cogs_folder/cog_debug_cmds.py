@@ -13,7 +13,7 @@ class debug_cmds(commands.Cog):
         name="force_toggle_role",
         description="Добавить/убрать роль участнику."
     )
-    async def toggle_role(
+    async def force_toggle_role(
         self,
         interaction: discord.Interaction,
         role: discord.Role,

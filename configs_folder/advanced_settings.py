@@ -1,5 +1,8 @@
+COMMAND_PREFIX = "$"
+# Префикс для текстовых команд бота
+
 DAILY_REQUEST_LIMIT = 50
-#Максимальное число запросов к нейросети в день на 1 пользователя
+# Максимальное число запросов к нейросети в день на 1 пользователя
 
 MAX_LEVEL = 1000
 # Максимальный уровень 
@@ -128,7 +131,45 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 SOUNDS_DIR = BASE_DIR / "sounds"
 ALLOWED_EXT = (".mp3", ".wav", ".ogg", ".m4a")
-FFMPEG_PATH = str(BASE_DIR / "ffmpeg") 
+
+import shutil
+import subprocess
+def get_ffmpeg_path():
+    # 1. ищем системный ffmpeg
+    system_ffmpeg = shutil.which("ffmpeg")
+
+    if system_ffmpeg:
+        try:
+            # проверяем, что он реально работает
+            result = subprocess.run(
+                [system_ffmpeg, "-version"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=3
+            )
+
+            if result.returncode == 0:
+                print(f"[FFMPEG] Использую системный: {system_ffmpeg}")
+                return system_ffmpeg
+
+        except Exception as e:
+            print(f"[FFMPEG] Системный ffmpeg найден, но не работает: {e}")
+
+    # 2. fallback на локальный
+    local_ffmpeg = BASE_DIR / "ffmpeg"
+
+    if local_ffmpeg.exists():
+        print(f"[FFMPEG] Использую локальный: {local_ffmpeg}")
+        return str(local_ffmpeg)
+
+    # 3. если вообще ничего нет — это уже критическая ошибка
+    raise RuntimeError(
+        "FFmpeg не найден ни в системе, ни в проекте. "
+        "Установи ffmpeg или добавь бинарник в проект."
+    )
+
+
+FFMPEG_PATH = get_ffmpeg_path()
 FFMPEG_OPTIONS = {
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
     "options": "-vn",
@@ -160,3 +201,151 @@ YTDL_OPTS = {
 REPO_URL = "https://github.com/Zlaoslav/discord_bot"
 
 MAIN_SERVER_NAME = "a4c50b5d-577f-4b11-8613-f5ab6f5fd6e1"
+
+RADIO_STATIONS = {
+    # Radio Record
+    "10's Dance": "https://radiorecord.hostingradio.ru/201096.aacp",
+    "2-step": "https://radiorecord.hostingradio.ru/2step96.aacp",
+    "60's Dance": "https://radiorecord.hostingradio.ru/cadillac96.aacp",
+    "70's Dance": "https://radiorecord.hostingradio.ru/197096.aacp",
+    "A State of Trance": "https://radiorecord.hostingradio.ru/asot96.aacp",
+    "Afro House": "https://radiorecord.hostingradio.ru/afro96.aacp",
+    "Ambient": "https://radiorecord.hostingradio.ru/ambient96.aacp",
+    "Armin van Buuren": "https://radiorecord.hostingradio.ru/armin96.aacp",
+    "Bass House": "https://radiorecord.hostingradio.ru/jackin96.aacp",
+    "Beach Party": "https://radiorecord.hostingradio.ru/beach96.aacp",
+    "Big Hits": "https://radiorecord.hostingradio.ru/bighits96.aacp",
+    "Black Rap": "https://radiorecord.hostingradio.ru/yo96.aacp",
+    "Breaks": "https://radiorecord.hostingradio.ru/brks96.aacp",
+    "Chill House": "https://radiorecord.hostingradio.ru/chillhouse96.aacp",
+    "Chill-Out": "https://radiorecord.hostingradio.ru/chil96.aacp",
+    "Christmas": "https://radiorecord.hostingradio.ru/christmas96.aacp",
+    "Christmas Chill": "https://radiorecord.hostingradio.ru/christmaschill96.aacp",
+    "Complextro": "https://radiorecord.hostingradio.ru/complextro96.aacp",
+    "D'n'B Classics": "https://radiorecord.hostingradio.ru/drumhits96.aacp",
+    "Dancecore": "https://radiorecord.hostingradio.ru/dc96.aacp",
+    "Darkside": "https://radiorecord.hostingradio.ru/darkside96.aacp",
+    "David Guetta": "https://radiorecord.hostingradio.ru/guetta96.aacp",
+    "Deep": "https://radiorecord.hostingradio.ru/deep96.aacp",
+    "Disco/Funk": "https://radiorecord.hostingradio.ru/discofunk96.aacp",
+    "DJ Gvozd": "https://radiorecord.hostingradio.ru/djgvozd96.aacp",
+    "DJ Цветкоff": "https://radiorecord.hostingradio.ru/tsvetkov96.aacp",
+    "Dream Dance": "https://radiorecord.hostingradio.ru/dream96.aacp",
+    "Dream Pop": "https://radiorecord.hostingradio.ru/dreampop96.aacp",
+    "Dubstep": "https://radiorecord.hostingradio.ru/dub96.aacp",
+    "EDM": "https://radiorecord.hostingradio.ru/club96.aacp",
+    "EDM Classics": "https://radiorecord.hostingradio.ru/edmhits96.aacp",
+    "Electro": "https://radiorecord.hostingradio.ru/elect96.aacp",
+    "Eurodance": "https://radiorecord.hostingradio.ru/eurodance96.aacp",
+    "Feel": "https://radiorecord.hostingradio.ru/feel96.aacp",
+    "Festivals": "https://radiorecord.hostingradio.ru/livedjsets96.aacp",
+    "Future Bass": "https://radiorecord.hostingradio.ru/fbass96.aacp",
+    "Future House": "https://radiorecord.hostingradio.ru/fut96.aacp",
+    "Future Rave": "https://radiorecord.hostingradio.ru/futurerave96.aacp",
+    "GOA/PSY": "https://radiorecord.hostingradio.ru/goa96.aacp",
+    "Groove/Tribal": "https://radiorecord.hostingradio.ru/groovetribal96.aacp",
+    "Hard Bass": "https://radiorecord.hostingradio.ru/hbass96.aacp",
+    "Hardstyle": "https://radiorecord.hostingradio.ru/teo96.aacp",
+    "House Classics": "https://radiorecord.hostingradio.ru/houseclss96.aacp",
+    "House Hits": "https://radiorecord.hostingradio.ru/househits96.aacp",
+    "Hypnotic": "https://radiorecord.hostingradio.ru/hypno96.aacp",
+    "Innocence": "https://radiorecord.hostingradio.ru/ibiza96.aacp",
+    "Jungle": "https://radiorecord.hostingradio.ru/jungle96.aacp",
+    "Lady Waks": "https://radiorecord.hostingradio.ru/ladywaks96.aacp",
+    "Latina Dance": "https://radiorecord.hostingradio.ru/latina96.aacp",
+    "Liquid Funk": "https://radiorecord.hostingradio.ru/liquidfunk96.aacp",
+    "Lo-Fi": "https://radiorecord.hostingradio.ru/lofi96.aacp",
+    "Lo-Fi House": "https://radiorecord.hostingradio.ru/lofihouse96.aacp",
+    "Martin Garrix": "https://radiorecord.hostingradio.ru/martingarrix96.aacp",
+    "Megamix": "https://radiorecord.hostingradio.ru/mix96.aacp",
+    "Midtempo": "https://radiorecord.hostingradio.ru/mt96.aacp",
+    "Minimal/Tech": "https://radiorecord.hostingradio.ru/mini96.aacp",
+    "Moombahton": "https://radiorecord.hostingradio.ru/mmbt96.aacp",
+    "Nejtrino & Baur": "https://radiorecord.hostingradio.ru/nejtrinobaur96.aacp",
+    "Neurofunk": "https://radiorecord.hostingradio.ru/neurofunk96.aacp",
+    "Nu Dance": "https://radiorecord.hostingradio.ru/nudance96.aacp",
+    "Oliver Heldens": "https://radiorecord.hostingradio.ru/oliverheldens96.aacp",
+    "Organic": "https://radiorecord.hostingradio.ru/organic96.aacp",
+    "Party 24/7": "https://radiorecord.hostingradio.ru/party96.aacp",
+    "Phonk": "https://radiorecord.hostingradio.ru/phonk96.aacp",
+    "Pirate Station": "https://radiorecord.hostingradio.ru/ps96.aacp",
+    "Progressive": "https://radiorecord.hostingradio.ru/progr96.aacp",
+    "Rap Classics": "https://radiorecord.hostingradio.ru/rapclassics96.aacp",
+    "Rap Hits": "https://radiorecord.hostingradio.ru/rap96.aacp",
+    "Rave FM": "https://radiorecord.hostingradio.ru/rave96.aacp",
+    "Record": "https://radiorecord.hostingradio.ru/rr_main96.aacp",
+    "Record 80-х": "https://radiorecord.hostingradio.ru/198096.aacp",
+    "Record Classix": "https://radiorecord.hostingradio.ru/classix96.aacp",
+    "Record Club Show": "https://radiorecord.hostingradio.ru/clubshow96.aacp",
+    "Record Gold": "https://radiorecord.hostingradio.ru/gold96.aacp",
+    "Reggae": "https://radiorecord.hostingradio.ru/reggae32.aacp",
+    "Remix": "https://radiorecord.hostingradio.ru/rmx96.aacp",
+    "Rock": "https://radiorecord.hostingradio.ru/rock96.aacp",
+    "Russian Gold": "https://radiorecord.hostingradio.ru/russiangold96.aacp",
+    "Russian Hits": "https://radiorecord.hostingradio.ru/russianhits96.aacp",
+    "Russian Mix": "https://radiorecord.hostingradio.ru/rus96.aacp",
+    "Summer Dance": "https://radiorecord.hostingradio.ru/summerparty96.aacp",
+    "Summer Lounge": "https://radiorecord.hostingradio.ru/summerlounge96.aacp",
+    "Synthwave": "https://radiorecord.hostingradio.ru/synth96.aacp",
+    "Tech House": "https://radiorecord.hostingradio.ru/techouse96.aacp",
+    "Techno": "https://radiorecord.hostingradio.ru/techno96.aacp",
+    "Technopop": "https://radiorecord.hostingradio.ru/technopop96.aacp",
+    "Tecktonik": "https://radiorecord.hostingradio.ru/tecktonik96.aacp",
+    "Tiesto": "https://radiorecord.hostingradio.ru/tiesto96.aacp",
+    "TOP 100 EDM": "https://radiorecord.hostingradio.ru/top100edm96.aacp",
+    "Trance Classics": "https://radiorecord.hostingradio.ru/trancehits96.aacp",
+    "Trancehouse": "https://radiorecord.hostingradio.ru/trancehouse96.aacp",
+    "Trancemission": "https://radiorecord.hostingradio.ru/tm96.aacp",
+    "Trap": "https://radiorecord.hostingradio.ru/trap96.aacp",
+    "Tropical": "https://radiorecord.hostingradio.ru/trop96.aacp",
+    "UK Garage": "https://radiorecord.hostingradio.ru/ukgarage96.aacp",
+    "Ultra Music Festival": "https://radiorecord.hostingradio.ru/ultra96.aacp",
+    "Uplifting": "https://radiorecord.hostingradio.ru/uplift96.aacp",
+    "VIP House": "https://radiorecord.hostingradio.ru/vip96.aacp",
+    "Workout": "https://radiorecord.hostingradio.ru/workout32.aacp",
+    "Веснушка FM": "https://radiorecord.hostingradio.ru/deti96.aacp",
+    "Гастарбайтер FM": "https://radiorecord.hostingradio.ru/gast96.aacp",
+    "Гоп FM": "https://radiorecord.hostingradio.ru/gop96.aacp",
+    "Колбасный Цех": "https://radiorecord.hostingradio.ru/pump96.aacp",
+    "Маятник Фуко": "https://radiorecord.hostingradio.ru/mf96.aacp",
+    "Медляк FM": "https://radiorecord.hostingradio.ru/mdl96.aacp",
+    "На Хайпе": "https://radiorecord.hostingradio.ru/hype96.aacp",
+    "На шашлыки!": "https://radiorecord.hostingradio.ru/nashashlyki96.aacp",
+    "Нафталин FM": "https://radiorecord.hostingradio.ru/naft96.aacp",
+    "Рекорд 00-х": "https://radiorecord.hostingradio.ru/200096.aacp",
+    "Руки Вверх!": "https://radiorecord.hostingradio.ru/rv96.aacp",
+    "Русская Зима": "https://radiorecord.hostingradio.ru/ruszima96.aacp",
+    "Симфония FM": "https://radiorecord.hostingradio.ru/symph96.aacp",
+    "Сказки MC V": "https://radiorecord.hostingradio.ru/skazki96.aacp",
+    "Супердискотека 90-х": "https://radiorecord.hostingradio.ru/sd9096.aacp",
+
+    # Other stations
+    "Nightwave Plaza": "https://radio.plaza.one/mp3",
+    "Ulitka": "http://air.radioulitka.ru:8000/ulitka_128",
+
+    # Европа Плюс
+    "Europa Plus Main": "http://ep128.hostingradio.ru:8030/ep128",
+    "Europa Plus Top 40": "http://eptop128server.streamr.ru:8033/eptop128",
+
+    # Другие
+    "Радио Эрмитаж": "https://hermitage.hostingradio.ru/hermitage128.mp3",
+
+    # Zaycev FM
+    "Zaycev Pop": "https://zaycevfm.cdnvideo.ru/ZaycevFM_pop_256.mp3",
+    "Zaycev Disco": "https://zaycevfm.cdnvideo.ru/ZaycevFM_disco_256.mp3",
+    "Zaycev Club": "https://zaycevfm.cdnvideo.ru/ZaycevFM_club_256.mp3",
+    "Zaycev NewRock": "https://zaycevfm.cdnvideo.ru/ZaycevFM_rock_256.mp3",
+    "Zaycev RnB": "https://zaycevfm.cdnvideo.ru/ZaycevFM_rnb_256.mp3",
+    "Zaycev Шансон": "https://zaycevfm.cdnvideo.ru/ZaycevFM_shanson_256.mp3",
+    "Zaycev Rus": "https://zaycevfm.cdnvideo.ru/ZaycevFM_rus_256.mp3",
+    "Zaycev Relax": "https://zaycevfm.cdnvideo.ru/ZaycevFM_relax_256.mp3",
+    "Zaycev Зайчата": "https://zaycevfm.cdnvideo.ru/ZaycevFM_zaychata_256.mp3",
+    "Zaycev K-Pop": "https://zaycevfm.cdnvideo.ru/ZaycevFM_kpop_256.mp3",
+    "Zaycev Rap": "https://zaycevfm.cdnvideo.ru/ZaycevFM_rap_256.mp3",
+    "Zaycev Metal": "https://zaycevfm.cdnvideo.ru/ZaycevFM_metal_256.mp3",
+    "Zaycev Bass": "https://zaycevfm.cdnvideo.ru/ZaycevFM_bass_256.mp3",
+    "Zaycev Love": "https://zaycevfm.cdnvideo.ru/ZaycevFM_holiday_256.mp3",
+    "Zaycev РуРок": "https://zaycevfm.cdnvideo.ru/ZaycevFM_rurock_256.mp3",
+    "Zaycev Folk": "https://zaycevfm.cdnvideo.ru/ZaycevFM_folk_256.mp3",
+    "Zaycev Classic": "https://zaycevfm.cdnvideo.ru/ZaycevFM_classic_256.mp3",
+}
