@@ -112,11 +112,11 @@ class sus_messages(commands.Cog):
                 await message.reply(r"https://klipy.com/gifs/pearto-teto")
 
         # ловушка на оркена
-        if self.slavi_member in message.mentions:
+        if self.slavi_member in message.mentions or "@everyone" in msglow or "@here" in msglow:
             if self.slavi_member.status != discord.Status.online:
                 await message.reply(f"**Славик не в сети!**\nЯ его виртуальный помощник, прошу тебя написать всё что хочешь от него, как только он вернётся я напомню ему о сообщении от {message.author.mention}\n__Это сообщение будет удалено {timestaps.in_seconds(60)}__", delete_after=60)
             else:
-                if message.author.id == 759310706343542854 and random.randint(1, 100) == 1:
+                if message.author.id == 759310706343542854 or message.author.id == 1310153194340352030:
                     await message.reply(await ask_groq((message.content)) + f"\n__Это сообщение будет удалено {timestaps.in_seconds(60)}__" , delete_after=60)
 
 

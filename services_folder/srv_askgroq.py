@@ -19,7 +19,6 @@ SYSTEM_PROMPT = """
 не пиши ответы длинее 1500 символов
 """
 async def ask_groq(user_text: str):
-    print(f"ask_groq called with user_text: {user_text}")
     client = AsyncOpenAI(
         api_key=GROQ_API_KEY,
         base_url="https://api.groq.com/openai/v1",
