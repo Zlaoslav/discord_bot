@@ -7,6 +7,8 @@ import services_folder.hlpr_timestamps as timestaps
 import random
 import re
 
+from services_folder.srv_askgroq import ask_groq
+
 async def forward_message_to_user(
     bot: discord.Client,
     source_message: discord.Message,
@@ -77,11 +79,6 @@ class sus_messages(commands.Cog):
 
         msglow = message.content.lower()
 
-        # айдишник оркена
-        if 759310706343542854 == message.author.id:
-            if random.randint(1, 50) == 1:
-                await message.reply(r"сука НЕ ПИНГУЙ ЕВРИВАН МНЕ БОЛЬШЕ ЗАЕБАЫФЛАЫФАФЫВОФГВ", mention_author=True, delete_after=30)
-        
         # айдишник бота
         if "<@1409084528588488727>" in msglow:
             await message.reply(r"<:realbot:1437494993248850052>\nhttps://tenor.com/view/fuck-you-gif-27037587", mention_author=True, delete_after=10)
@@ -114,10 +111,13 @@ class sus_messages(commands.Cog):
             if random.randint(1, 50) == 1:
                 await message.reply(r"https://klipy.com/gifs/pearto-teto")
 
-        # мой айдишник
+        # ловушка на оркена
         if self.slavi_member in message.mentions:
             if self.slavi_member.status != discord.Status.online:
                 await message.reply(f"**Славик не в сети!**\nЯ его виртуальный помощник, прошу тебя написать всё что хочешь от него, как только он вернётся я напомню ему о сообщении от {message.author.mention}\n__Это сообщение будет удалено {timestaps.in_seconds(60)}__", delete_after=60)
+            else:
+                if message.author.id == 759310706343542854 and random.randint(1, 100) == 1:
+                    await message.reply(await ask_groq((message.content)) + f"\n__Это сообщение будет удалено {timestaps.in_seconds(60)}__" , delete_after=60)
 
 
         if message.guild == None:

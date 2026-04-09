@@ -4,8 +4,9 @@ davey
 playwright
 PyNaCl
 google-genai
-requests
+aiohttp
 yt_dlp
+openai
 
 # Web / OAuth
 fastapi
