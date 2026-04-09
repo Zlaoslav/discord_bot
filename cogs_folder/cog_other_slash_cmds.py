@@ -132,5 +132,22 @@ class other_slash_cmds(commands.Cog):
             logger.error(e)
 
 
+    @app_commands.command(
+        name="who_owner",
+        description="Узнать, кто является владельцем сервера"
+    )
+    async def who_owner(
+        self,
+        interaction: discord.Interaction
+    ):
+        
+        if not interaction.guild:
+            await interaction.response.send_message("Команда только на сервере.", ephemeral=True)
+            return
+
+        owner = interaction.guild.owner
+        await interaction.response.send_message(f"Владелец сервера: {owner.mention}", allowed_mentions=discord.AllowedMentions.none())
+        
+
 async def setup(bot: Bot):
     await bot.add_cog(other_slash_cmds(bot))
