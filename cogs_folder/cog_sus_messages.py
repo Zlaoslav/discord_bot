@@ -120,7 +120,7 @@ class sus_messages(commands.Cog):
                     await message.reply(
                         await ask_groq((message.content)) + f"\n__Это сообщение будет удалено {timestaps.in_seconds(60)}__" ,
                         delete_after=60,
-                        mention_allowed=AllowedMentions(False, False, False, False, False)
+                        mention_allowed=AllowedMentions().none()
                     )
 
 
