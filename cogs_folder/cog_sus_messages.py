@@ -1,7 +1,7 @@
 from bot import Bot
 import discord
 from discord.ext import commands
-from discord import app_commands
+from discord import app_commands, AllowedMentions
 
 import services_folder.hlpr_timestamps as timestaps
 import random
@@ -117,7 +117,11 @@ class sus_messages(commands.Cog):
                 await message.reply(f"**Славик не в сети!**\nЯ его виртуальный помощник, прошу тебя написать всё что хочешь от него, как только он вернётся я напомню ему о сообщении от {message.author.mention}\n__Это сообщение будет удалено {timestaps.in_seconds(60)}__", delete_after=60)
             else:
                 if message.author.id == 759310706343542854 or message.author.id == 1310153194340352030:
-                    await message.reply(await ask_groq((message.content)) + f"\n__Это сообщение будет удалено {timestaps.in_seconds(60)}__" , delete_after=60)
+                    await message.reply(
+                        await ask_groq((message.content)) + f"\n__Это сообщение будет удалено {timestaps.in_seconds(60)}__" ,
+                        delete_after=60,
+                        mention_allowed=AllowedMentions(False, False, False, False, False)
+                    )
 
 
         if message.guild == None:
