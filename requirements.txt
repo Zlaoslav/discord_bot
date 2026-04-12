@@ -7,15 +7,12 @@ google-genai
 aiohttp
 yt_dlp
 openai
-
-# Web / OAuth
 fastapi
 uvicorn[standard]
 httpx
 python-jose[cryptography]
 jose
 pyngrok
-
 mcstatus
-
 aiosqlite
+deep_translator

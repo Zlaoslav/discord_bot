@@ -32,14 +32,10 @@ class ColorFormatter(logging.Formatter):
         return msg
 
 
-# ✅ ИМЕННОЙ логгер, НЕ root
-logger = logging.getLogger("minecraft_bot")
+logger = logging.getLogger("discord_bot")
 logger.setLevel(logging.INFO)
-
-# ❗ КЛЮЧЕВОЕ — запрещаем проброс в root
 logger.propagate = False
 
-# Настраиваем handler ТОЛЬКО один раз
 if not logger.handlers:
     handler = logging.StreamHandler()
     formatter = ColorFormatter(
@@ -53,4 +49,4 @@ if not logger.handlers:
 logging.getLogger("aiosqlite").setLevel(logging.WARNING)
 logging.getLogger("aiosqlite.core").setLevel(logging.WARNING)
 
-__all__ = ["logger", "ColorFormatter", "COLORS"]
+__all__ = ["logger"]

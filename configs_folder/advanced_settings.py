@@ -1,4 +1,4 @@
-COMMAND_PREFIX = "$"
+COMMAND_PREFIX = "?"
 # Префикс для текстовых команд бота
 
 DAILY_REQUEST_LIMIT = 50
