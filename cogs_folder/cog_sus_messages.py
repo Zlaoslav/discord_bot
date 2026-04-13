@@ -117,8 +117,7 @@ class sus_messages(commands.Cog):
             else:
                 if author_id == 759310706343542854 or author_id == 1310153194340352030 or author_id == 1476857212419833916:
                     await message.reply(
-                        await ask_groq( f"С тобой разговаривает: {message.author.name}. Сообщение: " + str(message.content)) + f"\n__Это сообщение будет удалено {timestaps.in_seconds(60)}__" ,
-                        delete_after=60,
+                        await ask_groq( f"С тобой разговаривает: {message.author.name}. Сообщение: " + str(message.content)),
                         allowed_mentions=AllowedMentions().none()
                     )
 
