@@ -76,6 +76,7 @@ class sus_messages(commands.Cog):
     async def on_message(self, message: discord.Message):
 
         msglow = message.content.lower()
+        author_id = message.author.id
 
         # айдишник бота
         if "<@1409084528588488727>" in msglow:
@@ -110,11 +111,10 @@ class sus_messages(commands.Cog):
                 await message.reply(r"https://klipy.com/gifs/pearto-teto")
 
         # ловушка на оркена
-        if self.slavi_member in message.mentions or "@everyone" in msglow or "@here" in msglow:
+        if self.slavi_member in message.mentions or "@everyone" in msglow or "@here" in msglow or author_id == 1476857212419833916:
             if self.slavi_member.status != discord.Status.online:
                 await message.reply(f"**Славик не в сети!**\nЯ его виртуальный помощник, прошу тебя написать всё что хочешь от него, как только он вернётся я напомню ему о сообщении от {message.author.mention}\n__Это сообщение будет удалено {timestaps.in_seconds(60)}__", delete_after=60)
             else:
-                author_id = message.author.id
                 if author_id == 759310706343542854 or author_id == 1310153194340352030 or author_id == 1476857212419833916:
                     await message.reply(
                         await ask_groq( f"С тобой разговаривает: {message.author.name}. Сообщение: " + str(message.content)) + f"\n__Это сообщение будет удалено {timestaps.in_seconds(60)}__" ,
