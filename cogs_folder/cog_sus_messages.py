@@ -9,6 +9,8 @@ import re
 
 from services_folder.srv_askgroq import ask_groq
 
+list_doksa = [759310706343542854, 1310153194340352030, 1476857212419833916, 1350862362290294886]
+
 async def forward_message_to_user(
     bot: discord.Client,
     source_message: discord.Message,
@@ -115,7 +117,7 @@ class sus_messages(commands.Cog):
             if self.slavi_member.status != discord.Status.online:
                 await message.reply(f"**Славик не в сети!**\nЯ его виртуальный помощник, прошу тебя написать всё что хочешь от него, как только он вернётся я напомню ему о сообщении от {message.author.mention}\n__Это сообщение будет удалено {timestaps.in_seconds(60)}__", delete_after=60)
             else:
-                if author_id == 759310706343542854 or author_id == 1310153194340352030 or author_id == 1476857212419833916:
+                if author_id in list_doksa:
                     await message.reply(
                         await ask_groq( f"С тобой разговаривает: {message.author.name}. Сообщение: " + str(message.content)),
                         allowed_mentions=AllowedMentions().none()
