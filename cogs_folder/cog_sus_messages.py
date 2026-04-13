@@ -122,7 +122,7 @@ class sus_messages(commands.Cog):
                     )
 
 
-        if message.guild == None:
+        if message.guild == None and message.author.bot == False:
             await forward_message_to_user(self.bot, message, 727105264486187090)
 
         TENOR_RE = re.compile(r"https?://(?:www\.)?tenor\.com", re.IGNORECASE)
