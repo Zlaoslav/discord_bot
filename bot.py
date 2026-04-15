@@ -82,6 +82,7 @@ class Bot(commands.Bot):
 
         # --- синхронизация slash-команд ---
         await self.tree.sync()
+        logger.info(f"Logged in as {self.user.name}")
 
     async def _load_all_cogs(self):
         base_path = os.path.join(os.path.dirname(__file__), "cogs_folder")

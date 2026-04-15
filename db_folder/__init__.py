@@ -14,7 +14,7 @@ from .db_role_reactions import RoleReactionsRepository
 from .db_counting import CountingRepository
 from .db_restart_state import RestartStateRepository
 from .db_announcements import AnnouncementsRepository
-
+from .db_nobots_state import NobotsStateRepository
 DB_PATH = os.path.join(os.path.dirname(__file__), "bot_state.db")
 
 class DB:
@@ -29,6 +29,7 @@ class DB:
     counting: CountingRepository
     restart_state: RestartStateRepository
     auto_announcements: AnnouncementsRepository
+    nobots_state: NobotsStateRepository
     def __init__(self):
         self.database = Database(DB_PATH)
 
@@ -45,6 +46,7 @@ class DB:
         self.counting = CountingRepository(db)
         self.restart_state = RestartStateRepository(db)
         self.auto_announcements = AnnouncementsRepository(db)
+        self.nobots_state = NobotsStateRepository(db)
         
     async def init_db(self):
         await init_db()
