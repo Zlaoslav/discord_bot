@@ -9,7 +9,7 @@ import re
 
 from services_folder.srv_askgroq import ask_groq
 
-list_doksa = [759310706343542854, 1310153194340352030, 1476857212419833916, 1350862362290294886]
+list_doksa = [759310706343542854, 1310153194340352030, 1350862362290294886]
 
 async def forward_message_to_user(
     bot: discord.Client,
