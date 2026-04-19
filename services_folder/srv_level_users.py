@@ -20,7 +20,7 @@ async def xp_to_level(bot: Bot, guild_id: int, user_id: int) -> int:
     level = 0
 
     while True:
-        next_level_xp = 25 * (level + 1) * (level + 2)
+        next_level_xp = 50 * (level + 1)
         if xp < next_level_xp or level >= MAX_LEVEL:
             break
         level += 1
