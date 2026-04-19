@@ -139,6 +139,7 @@ async def init_db():
                     channel_id INTEGER PRIMARY KEY
                 );
             """)
+
             # Таблица nobots_state
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS nobots_state (
@@ -146,5 +147,14 @@ async def init_db():
                 );
             """)
 
+            # Таблица deadmin_roles
+            await cur.execute("""
+                CREATE TABLE IF NOT EXISTS deadmin_roles (
+                    guild_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    roles text NOT NULL,
+                    PRIMARY KEY (guild_id, user_id)
+                );
+            """)
 
         await conn.commit()

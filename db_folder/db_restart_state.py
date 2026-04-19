@@ -14,8 +14,8 @@ class RestartStateRepository:
         """Сохраняет ID канала, куда надо отправить уведомление после рестарта."""
 
         await self.db.execute(
-            """
-                UPDATE restart_state
+            f"""
+                UPDATE {self.__TABLE}
                 SET channel_id = ?
                 WHERE id = 1
             """,
@@ -29,18 +29,17 @@ class RestartStateRepository:
         """Возвращает сохранённый channel_id и очищает поле в БД."""
 
         cursor = await self.db.execute(
-            """
+            f"""
                 SELECT channel_id
-                FROM restart_state
+                FROM {self.__TABLE}
                 WHERE id = 1
             """
         )
         row = await cursor.fetchone()
         channel_id = row[0] if row else None
-        # очищаем
         await cursor.execute(
-            """
-                UPDATE restart_state
+            f"""
+                UPDATE {self.__TABLE}
                 SET channel_id = NULL
                 WHERE id = 1
             """

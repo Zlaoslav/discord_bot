@@ -1,3 +1,4 @@
+from services_folder.hlpr_logging import logger
 COMMAND_PREFIX = "?"
 # Префикс для текстовых команд бота
 
@@ -149,17 +150,18 @@ def get_ffmpeg_path():
             )
 
             if result.returncode == 0:
-                print(f"[FFMPEG] Использую системный: {system_ffmpeg}")
+                logger.debug(f"[FFMPEG] Использую системный: {system_ffmpeg}")
                 return system_ffmpeg
 
         except Exception as e:
-            print(f"[FFMPEG] Системный ffmpeg найден, но не работает: {e}")
+            pass
+            logger.error(f"[FFMPEG] Системный ffmpeg найден, но не работает: {e}")
 
     # 2. fallback на локальный
     local_ffmpeg = BASE_DIR / "ffmpeg"
 
     if local_ffmpeg.exists():
-        print(f"[FFMPEG] Использую локальный: {local_ffmpeg}")
+        logger.debug(f"[FFMPEG] Использую локальный: {local_ffmpeg}")
         return str(local_ffmpeg)
 
     # 3. если вообще ничего нет — это уже критическая ошибка
