@@ -112,6 +112,10 @@ class sus_messages(commands.Cog):
             if random.randint(1, 50) == 1:
                 await message.reply(r"https://klipy.com/gifs/pearto-teto")
 
+        if "pollpi" in msglow or "поллпи" in msglow:
+            if message.author.id == 1474049949225324586 or message.author.id == 1476857212419833916:
+                await message.delete()
+                
         # ловушка на оркена
         if self.slavi_member in message.mentions or "@everyone" in msglow or "@here" in msglow or author_id == 1476857212419833916:
             if self.slavi_member.status != discord.Status.online:
