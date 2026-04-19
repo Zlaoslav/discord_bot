@@ -20,7 +20,8 @@ class join_leave(commands.Cog):
         self,
         interaction: discord.Interaction,
         channel: discord.TextChannel | None = None,
-        mention_role: discord.Role | None = None
+        mention_role: discord.Role | None = None,
+        welcome_message: str | None = None
         ):
 
         if interaction.guild is None:
@@ -32,9 +33,14 @@ class join_leave(commands.Cog):
             logger.debug(f"{interaction.user.name} try use set_new_member_channel")
             return
         targetchanel = channel or interaction.channel
+        welcome_message = welcome_message or ""
+        mention_id = 0
+        if mention_role:
+            mention_id = mention_role.id
         try:
-            mention_channel_id = mention_role.id or 0
-            await self.bot.db.join_leave.save_join_leave_channel(interaction.guild.id, targetchanel.id, mention_channel_id)
+
+
+            await self.bot.db.join_leave.save_join_leave_channel(interaction.guild.id, targetchanel.id, mention_id, welcome_message)
             await interaction.response.send_message("Успешно!", ephemeral=True)
         except Exception as e:
             logger.error(e)
@@ -68,7 +74,7 @@ class join_leave(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         row = await self.bot.db.join_leave.get_join_leave_channel(member.guild.id)
-        channel_id, role_id = row
+        channel_id, role_id, welcome_message = row
         if channel_id == None:
             return
 
@@ -84,11 +90,11 @@ class join_leave(commands.Cog):
 
         if role_id:
             await channel.send(
-                f"Добро пожаловать, {member.mention}! ({member.name}), account age: {age_days}, id: `{member.id}` <@&{role_id}>", 
+                f"Добро пожаловать, {member.mention}! ({member.name}), account age: {age_days}, id: `{member.id}` <@&{role_id}>\n{welcome_message}", 
             )
         else:
             await channel.send(
-                f"Добро пожаловать, {member.mention}! ({member.name}), account age: {age_days}, id: `{member.id}`", 
+                f"Добро пожаловать, {member.mention}! ({member.name}), account age: {age_days}, id: `{member.id}`\n{welcome_message}", 
             )
 
 

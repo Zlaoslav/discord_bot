@@ -42,7 +42,8 @@ async def init_db():
                 CREATE TABLE IF NOT EXISTS join_leave (
                     guild_id INTEGER PRIMARY KEY,
                     channel_id INTEGER,
-                    mention_role_id INTEGER
+                    mention_role_id INTEGER,
+                    welcome_message TEXT
                 );
             """)
 
