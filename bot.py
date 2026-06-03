@@ -5,6 +5,7 @@ from pathlib import Path
 import json
 import socket
 import time
+import signal
 
 import discord
 from discord.ext import commands, tasks
@@ -117,10 +118,29 @@ class Bot(commands.Bot):
             await self.db.database.close()
         await super().close()
 
-
+bot_instance = None
+shutdown_event = asyncio.Event()
 def main():
-    bot = Bot()
-    bot.run(DISCORD_TOKEN)
+    global bot_instance
+
+    bot_instance = Bot()
+
+    async def shutdown():
+        logger.info("Shutdown requested")
+        await bot_instance.close()
+
+    def signal_handler(signum, frame):
+        logger.info(f"Received signal {signum}")
+
+        loop = bot_instance.loop
+        loop.call_soon_threadsafe(
+            lambda: asyncio.create_task(shutdown())
+        )
+
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+
+    bot_instance.run(DISCORD_TOKEN)
 
 
 if __name__ == "__main__":

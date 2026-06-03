@@ -10,7 +10,27 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Optional
+import signal
 
+shutdown_requested = False
+current_bot_proc = None
+
+def linux_shutdown(signum, frame):
+    global shutdown_requested
+
+    print(f"[INFO] Получен сигнал {signum}")
+    shutdown_requested = True
+
+    global current_bot_proc
+
+    try:
+        if current_bot_proc and current_bot_proc.poll() is None:
+            current_bot_proc.terminate()
+    except Exception as e:
+        print(e)
+
+signal.signal(signal.SIGTERM, linux_shutdown)
+signal.signal(signal.SIGINT, linux_shutdown)
 CURRENT_DIR = Path(__file__).parent.resolve()
 BOT_FILE = CURRENT_DIR / "bot.py"
 REQUIREMENTS = CURRENT_DIR / "requirements.txt"
@@ -579,7 +599,9 @@ def run_bot_loop():
             return
 
         print("[INFO] Запуск бота...")
+        global current_bot_proc
         proc = subprocess.Popen([sys.executable, str(BOT_FILE)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        current_bot_proc = proc
         last_output_lines = []
         try:
             for line in proc.stdout:
@@ -591,6 +613,10 @@ def run_bot_loop():
             print("[ERROR] reading bot stdout failed:", e)
 
         proc.wait()
+        if shutdown_requested:
+            print("[INFO] Shutdown requested, exiting bot loop")
+            return
+        
         exit_code = proc.returncode
         print(f"[INFO] Бот завершил работу с кодом {exit_code}")
 
@@ -738,14 +764,36 @@ async def wait_for_remote_release(channel):
 async def run_main_job():
     print("Main job started (master).")
     send_status(f"```diff\n+ StartUp By {USERNAME}\n```", thread_id=MAIN_THREAD_ID)
+
     loop = asyncio.get_running_loop()
     asyncio.create_task(loop.run_in_executor(None, run_bot_loop))
+
     try:
-        while True:
-            await asyncio.sleep(10)
+        while not shutdown_requested:
+            await asyncio.sleep(1)
+
+        print("[INFO] Выполняем корректное завершение")
+
+        uptime = int(time.time() - starttime)
+
+        send_status(
+            f"```diff\n- Shutdown, UpTime {format_duration(uptime)} By {USERNAME}\n```",
+            thread_id=MAIN_THREAD_ID
+        )
+
+        release_local_lock()
+
+        try:
+            if LOCK_CHANNEL_ID:
+                lock_channel = await client.fetch_channel(LOCK_CHANNEL_ID)
+                await release_remote_lock(lock_channel)
+        except Exception as e:
+            print("release_remote_lock:", e)
+
+        await client.close()
+
     except asyncio.CancelledError:
         print("Main job cancelled.")
-        return
 
 async def startup_sequence():
     if not acquire_local_lock():
