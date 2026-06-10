@@ -50,7 +50,7 @@ class join_leave(commands.Cog):
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
         row = await self.bot.db.join_leave.get_join_leave_channel(member.guild.id)
-        channel_id, role_id = row
+        channel_id, role_id, welcome_message = row = row
         if channel_id == None:
             return
 
