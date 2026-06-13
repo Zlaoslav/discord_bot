@@ -112,20 +112,24 @@ class sus_messages(commands.Cog):
             if random.randint(1, 50) == 1:
                 await message.reply(r"https://klipy.com/gifs/pearto-teto")
 
-        if "pollpi" in msglow or "поллпи" in msglow:
-            if message.author.id == 1474049949225324586 or message.author.id == 1476857212419833916:
-                await message.delete()
-                
-        # ловушка на оркена
-        if self.slavi_member in message.mentions or "@everyone" in msglow or "@here" in msglow or author_id == 1476857212419833916:
-            if self.slavi_member.status != discord.Status.online:
-                await message.reply(f"**Славик не в сети!**\nЯ его виртуальный помощник, прошу тебя написать всё что хочешь от него, как только он вернётся я напомню ему о сообщении от {message.author.mention}\n__Это сообщение будет удалено {timestaps.in_seconds(60)}__", delete_after=60)
-            else:
-                if author_id in list_doksa:
-                    await message.reply(
-                        await ask_groq( f"С тобой разговаривает: {message.author.name}. Сообщение: " + str(message.content)),
+        if (
+                msglow.startswith("?pp")
+                or msglow.startswith("?pollpi")
+                or "полпи" in msglow
+                or "поллпи" in msglow
+                or "pollpi" in msglow
+            ):
+            await message.reply(
+                        await ask_groq(
+                            f"С тобой разговаривает: {message.author.name}. Сообщение: " + str(message.content)
+                        ),
                         allowed_mentions=AllowedMentions().none()
                     )
+
+        if self.slavi_member in message:
+            if self.slavi_member.status != discord.Status.online:
+                await message.reply(f"**Славик не в сети!**\nЯ его виртуальный помощник, прошу тебя написать всё что хочешь от него, как только он вернётся я напомню ему о сообщении от {message.author.mention}\n__Это сообщение будет удалено {timestaps.in_seconds(60)}__", delete_after=60)
+
 
 
         if message.guild == None and message.author.bot == False:
