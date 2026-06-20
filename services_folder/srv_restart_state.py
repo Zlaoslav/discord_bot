@@ -5,6 +5,7 @@ import sys
 import os
 from services_folder.hlpr_logging import logger
 from configs_folder.advanced_settings import OWNER_ID
+from pathlib import Path
 
 async def notify_after_restart(bot: Bot):
     # вызывается из on_ready после того как бот залогинился
@@ -106,7 +107,7 @@ async def quickrestart_process(bot: Bot, interaction_or_ctx=None):
     await bot.db.restart_state.save_restart_channel(int(channel_id) if channel_id is not None else None)
 
     # создаём флаг быстрого перезапуска
-    quick_restart_flag = os.path.join(os.path.dirname(__file__), ".quick_restart")
+    quick_restart_flag = str(Path(__file__).resolve().parent.parent / ".quick_restart")
     try:
         with open(quick_restart_flag, "w") as f:
             f.write("")

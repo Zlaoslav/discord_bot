@@ -5,7 +5,8 @@ from discord import app_commands
 import services_folder.hlpr_perms_manager as perms_manager
 from services_folder.srv_restart_state import restart_process, quickrestart_process, notify_after_restart
 
-import os 
+import os
+from pathlib import Path
 from typing import Optional
 
 class restart_state(commands.Cog):
@@ -24,7 +25,7 @@ class restart_state(commands.Cog):
         except: pass
 
         # Создаём флаг shutdown для корректного завершения
-        shutdown_flag = os.path.join(os.path.dirname(__file__), ".shutdown")
+        shutdown_flag = str(Path(__file__).resolve().parent.parent / ".shutdown")
         try:
             with open(shutdown_flag, "w") as f:
                 f.write("")
