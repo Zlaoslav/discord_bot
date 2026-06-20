@@ -514,7 +514,7 @@ class root(commands.Cog):
             f"- `{f.relative_to(BASE_DIR)}`" for f in changed_files
         )
         cogs_list = "\n".join(
-            f"- `{c[12:]}`" for c in sorted(target_cogs)
+            f"- `{c[16:]}`" for c in sorted(target_cogs)
         )
 
         commit_message = run_cmd(
