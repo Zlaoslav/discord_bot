@@ -71,12 +71,58 @@ class announcements(commands.Cog):
         if not perms.manage_messages:
             return
         
+        if message.is_crossposted():
+            return
+
         try:
             await message.publish()
         except Forbidden:
             await self.bot.db.auto_announcements.delete(message.channel.id)
         except Exception:
             pass
+    
+    
+    @commands.Cog.listener()
+    async def on_ready(self):
+        # При запуске бота проверяем все каналы с автопубликацией и удаляем те, в которых нет прав
+        auto_channels = await self.bot.db.auto_announcements.get_all()
+        for channel_id in auto_channels:
+            # Валидация
+            channel = self.bot.get_channel(channel_id)
+            if channel is None:
+                await self.bot.db.auto_announcements.delete(channel_id)
+                continue
+            
+            if channel.type == discord.ChannelType.voice:
+                await self.bot.db.auto_announcements.delete(channel_id)
+                continue
+
+            if not channel.type.is_news():
+                await self.bot.db.auto_announcements.delete(channel_id)
+                continue
+
+            perms = channel.permissions_for(channel.guild.me)
+            if not (
+                    perms.manage_messages
+                    and perms.read_messages
+                    and perms.view_channel
+                    and perms.send_messages
+                    and perms.read_message_history
+                ):
+                await self.bot.db.auto_announcements.delete(channel_id)
+                continue
+            
+            # Обновления последних 100 сообщений
+            async for message in channel.history(limit=100):
+                if message.is_crossposted():
+                    break
+                try:
+                    await message.publish()
+                except Forbidden:
+                    await self.bot.db.auto_announcements.delete(channel_id)
+                    break
+                except Exception:
+                    pass
         
         
 async def setup(bot: Bot):

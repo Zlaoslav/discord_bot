@@ -99,10 +99,10 @@ class minecraft_panel(commands.Cog):
                 logger.info(f"[PANEL REMOVE] {server_ip}:{port} — сообщение удалено")
 
             except discord.Forbidden:
-                logger.warning(f"[PANEL ERROR] {server_ip}:{port} — нет прав")
+                pass
 
             except Exception as e:
-                logger.error(f"[PANEL ERROR] {server_ip}:{port} → {e}")
+                pass
 
 
 async def setup(bot: Bot):

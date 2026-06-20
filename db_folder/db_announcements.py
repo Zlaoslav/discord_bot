@@ -41,6 +41,7 @@ class AnnouncementsRepository:
         await self.db.commit()
         return True
 
+
     async def is_auto_announcement(
         self,
         channel_id: int
@@ -48,3 +49,10 @@ class AnnouncementsRepository:
         cursor = await self.db.execute(f"""SELECT EXISTS(SELECT 1 FROM {self.__TABLE} WHERE channel_id = ?);""", (channel_id,))
         result = await cursor.fetchone()
         return result[0] == 1
+
+
+    async def get_all(self) -> list[int]:
+        """Получить все каналы с автопубликацией"""
+        cursor = await self.db.execute(f"""SELECT channel_id FROM {self.__TABLE};""")
+        result = await cursor.fetchall()
+        return [row[0] for row in result]
