@@ -510,8 +510,12 @@ class root(commands.Cog):
 
         await self.bot.tree.sync()
 
-        files_list = "\n".join(f"- `{f.relative_to(BASE_DIR)}`" for f in changed_files)
-        cogs_list = "\n".join(f"- `{c}`" for c in sorted(target_cogs))
+        files_list = "\n".join(
+            f"- `{f.relative_to(BASE_DIR)}`" for f in changed_files
+        )
+        cogs_list = "\n".join(
+            f"- `{c[12:]}`" for c in sorted(target_cogs)
+        )
 
         commit_message = run_cmd(
             "git", "-C", str(BASE_DIR), "log", "-1", "--pretty=%s", after,
