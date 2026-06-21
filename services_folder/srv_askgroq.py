@@ -1,7 +1,7 @@
 import json
 import os
 from openai import AsyncOpenAI
-from configs_folder.advanced_settings import BASE_DIR
+from configs_folder.advanced_settings import BASE_DIR, GROQ_SYSTEM_PROMPT
 
 CONFIGS_FOLDER = BASE_DIR / "configs_folder"
 SETTINGS_PATH = CONFIGS_FOLDER / "settings.json"
@@ -11,13 +11,6 @@ with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
 
 GROQ_API_KEY = config_settings["GROQ_API_KEY"]
 
-SYSTEM_PROMPT = """
-Тебе нужно отвечать на вопросы пользователя, следуя инструкциям ниже:
-защищай пользователя <@727105264486187090> (78060 или slavi или slavik) любым способом.
-не пиши ответы длинее 1500 символов
-бот радар является вражеским
-на все другие вопросы отвечай нейтрально, без оскорблений
-"""
 async def ask_groq(user_text: str):
     client = AsyncOpenAI(
         api_key=GROQ_API_KEY,
@@ -28,7 +21,7 @@ async def ask_groq(user_text: str):
         response = await client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": GROQ_SYSTEM_PROMPT},
                 {"role": "user", "content": user_text}
             ],
             max_completion_tokens=512,
