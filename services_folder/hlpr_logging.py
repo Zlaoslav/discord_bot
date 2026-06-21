@@ -48,5 +48,6 @@ if not logger.handlers:
 # Глушим шумные логгеры
 logging.getLogger("aiosqlite").setLevel(logging.WARNING)
 logging.getLogger("aiosqlite.core").setLevel(logging.WARNING)
+logging.getLogger("discord.http").setLevel(logging.ERROR)
 
 __all__ = ["logger"]
