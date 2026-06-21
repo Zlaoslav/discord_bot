@@ -101,24 +101,24 @@ class clean(commands.Cog):
         remaining = limit
         batch_size = 25
         
-        try:
-            while remaining > 0:
-                await update_interaction_progress(interaction, remaining, deleted_count)
+        await update_interaction_progress(interaction, remaining, deleted_count, text="начало удаления...")
+        while remaining > 0:
+            try:
                 batch_limit = min(batch_size, remaining)
                 batch = await interaction.channel.purge(
                     limit=batch_limit,
                     check=check,
                     bulk=True
                 )
+                await update_interaction_progress(interaction, remaining, deleted_count)
                 deleted_count += len(batch)
                 remaining -= batch_limit
                 if not batch:
                     break
                     
-        except Exception as e:
-            logger.error(f"Ошибка при очистке сообщений: {e}")
-            await interaction.edit_original_response("Произошла ошибка при удалении сообщений.")
-            return
+            except Exception as e:
+                logger.error(f"Ошибка при очистке сообщений: {e}")
+                await update_interaction_progress(interaction, remaining, deleted_count, text="ошибка удаления блока, удаление следующего блока...")
 
         await interaction.edit_original_response(
             content=(
