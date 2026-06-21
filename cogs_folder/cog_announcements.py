@@ -55,19 +55,17 @@ class announcements(commands.Cog):
         self,
         message: discord.Message
     ):
-        if message.channel.guild == None:
+        channel = message.channel
+        if channel.guild == None:
             return
 
-        if message.channel.type == discord.ChannelType.voice:
-            return
-        
-        if not message.channel.is_news():
+        if channel.type != discord.ChannelType.news:
             return
         
         if not await self.bot.db.auto_announcements.is_auto_announcement(message.channel.id):
             return
         
-        perms = message.channel.permissions_for(message.guild.me)
+        perms = channel.permissions_for(message.guild.me)
         if not perms.manage_messages:
             return
         
@@ -92,12 +90,8 @@ class announcements(commands.Cog):
             if channel is None:
                 await self.bot.db.auto_announcements.delete(channel_id)
                 continue
-            
-            if channel.type == discord.ChannelType.voice:
-                await self.bot.db.auto_announcements.delete(channel_id)
-                continue
 
-            if not channel.type.is_news():
+            if channel.type != discord.ChannelType.news:
                 await self.bot.db.auto_announcements.delete(channel_id)
                 continue
 

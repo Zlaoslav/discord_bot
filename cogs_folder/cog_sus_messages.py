@@ -3,7 +3,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands, AllowedMentions
 
-import services_folder.hlpr_timestamps as timestaps
+import services_folder.hlpr_timestamps as timestamps
 import random
 import re
 
@@ -127,9 +127,9 @@ class sus_messages(commands.Cog):
                         allowed_mentions=AllowedMentions().none()
                     )
 
-        if self.slavi_member in message:
+        if self.slavi_member and self.slavi_member in message.mentions:
             if self.slavi_member.status != discord.Status.online:
-                await message.reply(f"**Славик не в сети!**\nЯ его виртуальный помощник, прошу тебя написать всё что хочешь от него, как только он вернётся я напомню ему о сообщении от {message.author.mention}\n__Это сообщение будет удалено {timestaps.in_seconds(60)}__", delete_after=60)
+                await message.reply(f"**Славик не в сети!**\nЯ его виртуальный помощник, прошу тебя написать всё что хочешь от него, как только он вернётся я напомню ему о сообщении от {message.author.mention}\n__Это сообщение будет удалено {timestamps.in_seconds(60)}__", delete_after=60)
 
 
 
