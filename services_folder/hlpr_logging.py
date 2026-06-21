@@ -104,7 +104,7 @@ class WebhookHandler(logging.Handler):
 
 logger = logging.getLogger("discord_bot")
 logger.setLevel(logging.DEBUG)
-logger.propagate = False
+logger.propagate = True
 
 if not logger.handlers:
     # Консольный обработчик с цветами (INFO и выше)
@@ -130,7 +130,7 @@ if LOGGING_WEBHOOK_URL:
     # Добавляем к корневому логгеру, чтобы ловить все логи
     root_logger = logging.getLogger()
     root_logger.addHandler(webhook_handler)
-    root_logger.setLevel(logging.INFO)
+    root_logger.setLevel(logging.DEBUG)
 
 # Глушим шумные логгеры
 logging.getLogger("aiosqlite").setLevel(logging.WARNING)
