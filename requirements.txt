@@ -16,3 +16,5 @@ pyngrok
 mcstatus
 aiosqlite
 deep_translator
+pillow
+moviepy
