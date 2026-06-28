@@ -83,7 +83,9 @@ class EmbedBuilder:
                 url: Optional[str] = None,
                 color: Optional[Union[str, int]] = None,
                 include_timestamp_field: bool = True,
-                timestamp_label: str = "Время"
+                timestamp_label: str = "Время",
+                author: Optional[Tuple[str, Optional[str], Optional[str]]] = None,
+                footer: Optional[Tuple[str, Optional[str]]] = None
             ):
         
         self._title = title
@@ -97,6 +99,11 @@ class EmbedBuilder:
         self._fields: List[Dict[str, Any]] = []
         self._include_timestamp_field = include_timestamp_field
         self._timestamp_label = timestamp_label
+
+        if author:
+            self.set_author(*author)
+        if footer:
+            self.set_footer(*footer)
 
 
     def set_title(self, title: str) -> "EmbedBuilder":
@@ -235,7 +242,9 @@ def quick_embed_text(
             color: Union[str, int] = "#5865F2",
             extra_fields: Optional[Iterable[Tuple[str, str, bool]]] = None,
             timestamp_field: bool = True,
-            timestamp_label: str = "Время"
+            timestamp_label: str = "Время",
+            author: Optional[Tuple[str, Optional[str], Optional[str]]] = None,
+            footer: Optional[Tuple[str, Optional[str]]] = None
         ) -> discord.Embed:
     """
     Быстрая функция — возвращает discord.Embed с description=text.
@@ -244,13 +253,17 @@ def quick_embed_text(
     - extra_fields: iterable кортежей (name, value, inline) — будут добавлены перед timestamp
     - timestamp_field: включить/выключить последний маленький field с текущим временем
     - timestamp_label: подпись для timestamp field
+    - author: кортеж (name, url, icon_url) для set_author
+    - footer: кортеж (text, icon_url) для set_footer
     """
     eb = EmbedBuilder(
             title=title,
             description=text,
             color=color,
             include_timestamp_field=timestamp_field,
-            timestamp_label=timestamp_label
+            timestamp_label=timestamp_label,
+            author=author,
+            footer=footer
         )
     if extra_fields:
         eb.add_fields(extra_fields)
