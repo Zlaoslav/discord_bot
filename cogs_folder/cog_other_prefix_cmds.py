@@ -73,6 +73,26 @@ class other_prefix_cmds(commands.Cog):
         else:
             await ctx.send("⚠ Синхронизация прошла, но вернулось 0 команд.")
 
+    @commands.command(name="updatecmds")
+    async def updatecmds(self, ctx: commands.Context):
+        if not perms_manager.has_perm(ctx.author.id, perms_manager.PermRole.HOST):
+            await ctx.send("У вас нет прав для этой команды.")
+            return
+        result = await sync_local_slash(self.bot, ctx.guild)
+        if result is None:
+            await ctx.send("❌ Ошибка при синхронизации. Смотри лог.")
+            return
+
+        if len(result) != 0:
+            await ctx.send(f"✅ Синхронизировано {len(result)} команд(ы).")
+        else:
+            await ctx.send("⚠ Синхронизация прошла, но вернулось 0 команд.")
+            
+        result = await clear_local_slash(self.bot, ctx.guild)
+        if result is True:
+            await ctx.send("✅ Удалены локальные слэш-команды")
+        else:
+            await ctx.send("❌ Ошибка при удалении локальных команд. Смотри лог.")
 
 async def setup(bot: Bot):
     await bot.add_cog(other_prefix_cmds(bot))
