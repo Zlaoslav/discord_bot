@@ -83,7 +83,7 @@ class WebhookHandler(logging.Handler):
             
             # Если есть исключение, добавляем traceback
             if record.exc_info:
-                traceback_text = self.formatException(record.exc_info)
+                traceback_text = logging.Formatter().formatException(record.exc_info)
                 message_text = f"{message_text}\n{traceback_text}"
             
             # Обрезаем до лимита Discord (2000 символов)
@@ -120,7 +120,7 @@ if not logger.handlers:
 # Обработчик для вебхука (INFO и выше) - добавляем к корневому логгеру для всех логгеров
 if LOGGING_WEBHOOK_URL:
     webhook_handler = WebhookHandler(LOGGING_WEBHOOK_URL)
-    webhook_handler.setLevel(logging.INFO)
+    webhook_handler.setLevel(logging.WARNING)
     webhook_formatter = logging.Formatter(
         "%(asctime)s [%(levelname)s] %(name)s - %(filename)s:%(lineno)d — %(message)s",
         "%Y-%m-%d %H:%M:%S"
