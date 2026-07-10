@@ -23,13 +23,12 @@ class nobots(commands.Cog):
         name="toggle_nobots",
         description="Включить/выключить режим nobots (новые боты не смогут зайти на сервер)"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def toggle_nobots(
         self,
         interaction: discord.Interaction
-    ):  
-        if not interaction.guild:
-            await interaction.response.send_message("Эту команду можно использовать только на сервере.")
-            return
+    ):
         if perms_manager.has_perm(
             interaction.user.id,
             perms_manager.PermRole.HOST
@@ -52,6 +51,50 @@ class nobots(commands.Cog):
                 await interaction.response.send_message("Режим nobots включён. Новые боты не смогут зайти на сервер.")
         else:
             await interaction.response.send_message("Ошибка! Недостаточно прав для использования команды. (Требуется права уровня 0 (HOST))")
+
+
+    @app_commands.command(name="nobots_status", description="Проверить статус режима nobots")
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
+    async def nobots_status(
+        self,
+        interaction: discord.Interaction
+    ):
+        guild_id = interaction.guild.id
+        current_state = await self.bot.db.nobots_state.get_nobots_state(guild_id)
+        status_message = "Режим nobots активен." if current_state else "Режим nobots выключен."
+        await interaction.response.send_message(status_message)
+
+
+    @app_commands.command(
+        name="set_nobots_status",
+        description="Установить статус режима nobots (включить/выключить)"
+    )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
+    async def set_nobots_status(
+        self,
+        interaction: discord.Interaction,
+        status: bool
+    ):
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.HOST):
+            await interaction.response.send_message("Ошибка! Недостаточно прав для использования команды. (Требуется права уровня 0 (HOST))")
+            return
+
+        guild_id = interaction.guild.id
+        nobots_state = await self.bot.db.nobots_state.get_nobots_state(guild_id)
+        if status:
+            if nobots_state:
+                await interaction.response.send_message("Режим nobots уже включён.")
+                return
+            await self.bot.db.nobots_state.add_nobots_state(guild_id)
+            await interaction.response.send_message("Режим nobots включён.")
+        else:
+            if not nobots_state:
+                await interaction.response.send_message("Режим nobots уже выключен.")
+                return
+            await self.bot.db.nobots_state.remove_nobots_state(guild_id)
+            await interaction.response.send_message("Режим nobots выключен.")
 
 
     @commands.Cog.listener()

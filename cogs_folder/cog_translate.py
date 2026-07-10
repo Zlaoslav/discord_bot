@@ -27,6 +27,8 @@ class translate(commands.Cog):
         name="translate_to_ru",
         description="Перевести на русский"
     )
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def translate_to_ru(self, interaction: discord.Interaction, text: str):
         translated = translate_to_ru(text)
         await interaction.response.send_message(translated, ephemeral=True)

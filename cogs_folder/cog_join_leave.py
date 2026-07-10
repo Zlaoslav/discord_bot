@@ -16,6 +16,8 @@ class join_leave(commands.Cog):
         name="set_new_member_channel",
         description="Установить канал с сообщениями о входе и выходе с сервера (owner only)"
         )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def set_new_member_channel(
         self,
         interaction: discord.Interaction,
@@ -23,12 +25,10 @@ class join_leave(commands.Cog):
         mention_role: discord.Role | None = None,
         welcome_message: str | None = None
         ):
-
-        if interaction.guild is None:
-            await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
-            return
-
-        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
+        if not (
+            perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER)
+            or interaction.user.guild_permissions.administrator
+        ):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=False)
             logger.debug(f"{interaction.user.name} try use set_new_member_channel")
             return

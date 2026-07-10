@@ -138,6 +138,8 @@ class radio(commands.Cog):
         name="play_radio_station",
         description="Включить радио станцию"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def play_radio_station(
         self,
         interaction: discord.Interaction

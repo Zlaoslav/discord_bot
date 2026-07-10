@@ -13,6 +13,8 @@ class chemical_reactions(commands.Cog):
         name="chemical_reactions",
         description="Анализ и генерация возможных уравнений реакции по списку реагентов (owner only)"
     )
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def chemical_reactions(
         self,
         interaction: discord.Interaction,

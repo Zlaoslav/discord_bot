@@ -15,17 +15,14 @@ class other_slash_cmds(commands.Cog):
         name="say",
         description="Отправка сообщения в канал"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def say(
         self,
         interaction: discord.Interaction,
         message: str,
         channel: discord.TextChannel | None = None
     ):
-
-        if interaction.guild is None:
-            await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
-            return
-
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logger.debug(f"{interaction.user.name} try use say")
@@ -52,11 +49,12 @@ class other_slash_cmds(commands.Cog):
         name="help",
         description="Показать справку по командам"
     )
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def help_slash(
         self,
         interaction: discord.Interaction
-    ):
-        
+    ):  
         """Отправляет полный список команд, разбитый на сообщения при необходимости."""
         await interaction.response.defer(ephemeral=False)
         text = BOT_COMMANDS_LIST.strip()
@@ -67,15 +65,12 @@ class other_slash_cmds(commands.Cog):
         name="who_owner",
         description="Узнать, кто является владельцем сервера"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def who_owner(
         self,
         interaction: discord.Interaction
     ):
-        
-        if not interaction.guild:
-            await interaction.response.send_message("Команда только на сервере.", ephemeral=True)
-            return
-
         owner = interaction.guild.owner
         await interaction.response.send_message(f"Владелец сервера: {owner.mention}", allowed_mentions=discord.AllowedMentions.none())
         

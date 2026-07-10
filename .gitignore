@@ -1,7 +1,7 @@
+_.*
 perms_data.json
 settings.json
 bot_state.db
-run_tests_manual.py
 .directory
 # Byte-compiled / optimized / DLL files
 __pycache__/

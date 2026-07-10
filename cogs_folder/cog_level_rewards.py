@@ -13,12 +13,14 @@ class level_rewards(commands.Cog):
         name="set_lvl_reward",
         description="Установить награду за получение уровня (owner only)"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def set_lvl_reward(
         self,
         interaction: discord.Interaction,
         level: int
     ):
-        interaction.followup.send(await try_set_level_reward(self.bot, interaction, level), ephemeral=True)
+        await interaction.followup.send(await try_set_level_reward(self.bot, interaction, level), ephemeral=True)
 
 
 

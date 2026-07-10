@@ -25,6 +25,8 @@ class clean(commands.Cog):
         name="clean",
         description="Очистить сообщения"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @discord.app_commands.describe(
         limit="Лимит сообщений для удаления [10000 max]",
         duration="Очистка по давности сообщений (например, 1d, 2h30m, 45m)",

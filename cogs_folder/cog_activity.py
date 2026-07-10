@@ -154,6 +154,8 @@ class activity(commands.Cog):
         name="edit_activity",
         description="Изменить активность бота"
     )
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def edit_activity(
         self,
         interaction: discord.Interaction

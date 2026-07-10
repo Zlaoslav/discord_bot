@@ -13,17 +13,14 @@ class debug_cmds(commands.Cog):
         name="force_toggle_role",
         description="Добавить/убрать роль участнику."
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def force_toggle_role(
         self,
         interaction: discord.Interaction,
         role: discord.Role,
         member: discord.Member | None = None
     ):
-        
-        if interaction.guild is None:
-            await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=True)
-            return
-
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.HOST):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logger.debug(f"{interaction.user.name} try use toggle_role")
@@ -59,17 +56,14 @@ class debug_cmds(commands.Cog):
         name="toggle_role",
         description="Добавить/убрать роль участнику."
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def toggle_role(
         self,
         interaction: discord.Interaction,
         role: discord.Role,
         member: discord.Member | None = None
     ):
-    
-        if interaction.guild is None:
-            await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=True)
-            return
-
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logger.debug(f"{interaction.user.name} try use toggle_role")
@@ -117,18 +111,15 @@ class debug_cmds(commands.Cog):
         name="demute",
         description="Включить или выключить микрофон/звук боту или участнику"
     )
-    async def say(
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
+    async def demute(
         self,
         interaction: discord.Interaction,
         mute : bool | None=None,
         deafen : bool | None=None,
         member : discord.Member | None=None
     ):
-
-        if interaction.guild is None:
-            await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
-            return
-
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logger.debug(f"{interaction.user.name} try use demute")
@@ -154,6 +145,8 @@ class debug_cmds(commands.Cog):
         name="roles",
         description="Показать роли участника и их ID"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def roles(
         self,
         interaction: discord.Interaction,
@@ -163,10 +156,6 @@ class debug_cmds(commands.Cog):
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logger.debug(f"{interaction.user.name} try use roles")
-            return
-
-        if interaction.guild is None:
-            await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=True)
             return
 
         target = member or interaction.user
@@ -190,6 +179,8 @@ class debug_cmds(commands.Cog):
         name="myperms",
         description="Показать права бота на сервере"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def myperms(
         self,
         interaction: discord.Interaction
@@ -198,10 +189,6 @@ class debug_cmds(commands.Cog):
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logger.debug(f"{interaction.user.name} try use myperms")
-            return
-
-        if interaction.guild is None:
-            await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=True)
             return
 
         perms = interaction.guild.me.guild_permissions

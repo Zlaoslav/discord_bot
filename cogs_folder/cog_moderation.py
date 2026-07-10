@@ -14,16 +14,13 @@ class moderation(commands.Cog):
         name="set_slowmode",
         description="Установить slowmode в текущем канале (секунды)"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def set_slowmode(
         self,
         interaction: discord.Interaction,
         seconds: int
     ):
-        
-        if interaction.guild is None:
-            await interaction.response.send_message("Команда только на сервере.", ephemeral=True)
-            return
-
         channel = interaction.channel
         if not isinstance(channel, discord.TextChannel):
             await interaction.response.send_message("Команду можно использовать только в текстовом канале.", ephemeral=True)
@@ -52,6 +49,8 @@ class moderation(commands.Cog):
         name="ban",
         description="Заблокировать участника"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def ban(
         self,
         interaction: discord.Interaction,
@@ -81,6 +80,8 @@ class moderation(commands.Cog):
         name="kick",
         description="Исключить участника"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def kick(
         self,
         interaction: discord.Interaction,
@@ -105,14 +106,13 @@ class moderation(commands.Cog):
         name="deadmin",
         description="Деадминить участника (убирает все роли и сохраняет их)"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def deadmin(
         self,
         interaction: discord.Interaction,
         member: discord.Member | None = None
     ):
-        if interaction.guild is None:
-            return await interaction.response.send_message("Команда только на сервере.", ephemeral=True)
-
         target = member or interaction.user
 
         # Проверка прав
@@ -181,6 +181,8 @@ class moderation(commands.Cog):
         name="readmin",
         description="Восстановить роли участника"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def readmin(
         self,
         interaction: discord.Interaction,

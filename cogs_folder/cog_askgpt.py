@@ -17,6 +17,8 @@ class Askgpt(commands.Cog):
         name="askgpt",
         description="Спросить нейросеть"
     )
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def askgpt(
         self,
         interaction: discord.Interaction,

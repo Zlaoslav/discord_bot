@@ -13,6 +13,8 @@ class dice(commands.Cog):
         name="d6",
         description="Подкинуть кубик d6"
     )
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def d6(
         self,
         interaction: discord.Interaction
@@ -23,6 +25,8 @@ class dice(commands.Cog):
         name="d20",
         description="Подкинуть кубик d20"
     )
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def d20(
         self,
         interaction: discord.Interaction
@@ -33,6 +37,8 @@ class dice(commands.Cog):
         name="d100",
         description="Подкинуть кубик d100"
     )
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def d100(
         self,
         interaction: discord.Interaction
@@ -43,6 +49,8 @@ class dice(commands.Cog):
         name="d_any",
         description="Подкинуть кубик с любыми числами"
     )
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def d_any(
         self,
         interaction: discord.Interaction,

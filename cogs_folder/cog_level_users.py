@@ -15,23 +15,17 @@ class level_xp(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
 
-
     @app_commands.command(
         name="lvl",
         description="Посмотерть уровень"
         )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def lvl(
         self,
         interaction: discord.Interaction,
         member: discord.Member | None = None
     ):
-        if interaction.guild is None:
-            await interaction.response.send_message(
-                "Команда доступна только на сервере.",
-                ephemeral=True
-            )
-            return
-
         member = member or interaction.user
         guild_id = interaction.guild.id
         user_id = member.id
@@ -77,48 +71,14 @@ class level_xp(commands.Cog):
         )
 
         await interaction.response.send_message(embed=embed)
-
-
-    @commands.Cog.listener()
-    async def on_raw_reaction_add(
-        self,
-        payload: discord.RawReactionActionEvent
-        ):
-        
-        if not payload.guild_id:
-            return  # это DM, игнорируем
-
-        # Проверка: автор не бот
-        member = payload.member  # может быть None, если бот не кэширует members
-        if member is None:
-            guild = self.bot.get_guild(payload.guild_id)
-            member = guild.get_member(payload.user_id)  # ищем в кеше
-        if member is None:
-            # Если не нашли в кеше — можно запросить через API:
-            # member = await guild.fetch_member(payload.user_id)
-            return
-
-        if member.bot:
-            return  # реакция от бота, игнорируем
-        
-        await try_give_xp(self.bot, payload.guild_id, payload.user_id)
-
-    @commands.Cog.listener()
-    async def on_message(
-        self,
-        message: discord.Message
-    ):
-        if message.author.bot:
-            return  # реакция от бота, игнорируем
-        if not message.guild:
-            return
-        await try_give_xp(self.bot, message.guild.id, message.author.id)
-        
+     
 
     @app_commands.command(
         name="lvltop",
         description="Посмотреть топ уровней"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.choices(
         category=[
             app_commands.Choice(name="Опыт", value="xp"),
@@ -200,7 +160,42 @@ class level_xp(commands.Cog):
 
         await interaction.followup.send(embed=embed)
 
+
+    @commands.Cog.listener()
+    async def on_raw_reaction_add(
+        self,
+        payload: discord.RawReactionActionEvent
+        ):
         
+        if not payload.guild_id:
+            return  # это DM, игнорируем
+
+        # Проверка: автор не бот
+        member = payload.member  # может быть None, если бот не кэширует members
+        if member is None:
+            guild = self.bot.get_guild(payload.guild_id)
+            member = guild.get_member(payload.user_id)  # ищем в кеше
+        if member is None:
+            # Если не нашли в кеше — можно запросить через API:
+            # member = await guild.fetch_member(payload.user_id)
+            return
+
+        if member.bot:
+            return  # реакция от бота, игнорируем
+        
+        await try_give_xp(self.bot, payload.guild_id, payload.user_id)
+
+    @commands.Cog.listener()
+    async def on_message(
+        self,
+        message: discord.Message
+    ):
+        if message.author.bot:
+            return  # реакция от бота, игнорируем
+        if not message.guild:
+            return
+        await try_give_xp(self.bot, message.guild.id, message.author.id)
+   
         
 async def setup(bot: Bot):
     await bot.add_cog(level_xp(bot))

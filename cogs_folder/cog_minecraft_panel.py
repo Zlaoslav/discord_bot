@@ -14,6 +14,8 @@ class minecraft_panel(commands.Cog):
         name="send_minecraft_panel",
         description="Создать панель сервера"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def send_minecraft_panel(
         self,
         interaction: discord.Interaction,

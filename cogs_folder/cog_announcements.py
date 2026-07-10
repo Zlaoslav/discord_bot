@@ -12,6 +12,8 @@ class announcements(commands.Cog):
         name="add_auto_publish",
         description="Запустить автопубликацию в канале для объявлений"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def add_auto_publish(
         self,
         interaction: discord.Interaction,
@@ -37,6 +39,8 @@ class announcements(commands.Cog):
         name="remove_auto_publish",
         description="Отменить автопубликацию в канале для объявлений"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def remove_auto_publish(
         self,
         interaction: discord.Interaction,

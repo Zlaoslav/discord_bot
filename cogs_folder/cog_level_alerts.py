@@ -14,15 +14,13 @@ class level_alerts(commands.Cog):
         name="set_level_alerts_channel",
         description="Установить канал для уведомлений о повышении уровня (owner only)"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def set_level_alerts_channel_cmd(
         self,
         interaction: discord.Interaction,
         channel: discord.TextChannel | None = None
     ):
-        
-        if interaction.guild is None:
-            await interaction.response.send_message("Команда доступна только на сервере.", ephemeral=True)
-            return
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас недостаточно прав для этой команды.", ephemeral=True)
             return

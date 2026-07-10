@@ -18,6 +18,8 @@ class counting(commands.Cog):
         name="calculate",
         description="Вычислить математическое выражение."
         )
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def calculate(
         self,
         interaction: discord.Interaction,
@@ -72,6 +74,8 @@ class counting(commands.Cog):
         name="set_counter",
         description="Установить канал для счётчика (owner only)."
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def set_counter(
         self,
         interaction: discord.Interaction,
@@ -95,6 +99,8 @@ class counting(commands.Cog):
         name="unset_counter",
         description="Отключить канал счётчика (owner only)."
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def unset_counter(
         self,
         interaction: discord.Interaction

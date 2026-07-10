@@ -11,7 +11,10 @@ class role_reactions(commands.Cog):
         self.bot = bot
 
 
+    
     @app_commands.command(name="role_reaction", description="Создать сообщение с реакцией для выдачи роли")
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @discord.app_commands.describe(
         emoji="Эмодзи для реакции",
         role="Роль для выдачи при реакции"

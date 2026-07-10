@@ -13,16 +13,13 @@ class custom_perms(commands.Cog):
         name="listperms",
         description="Показать пользовательские права из perms_data.json"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def listperms(
         self,
         interaction: discord.Interaction,
         member: discord.Member | None = None
     ):
-        
-        if interaction.guild is None:
-            await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=True)
-            return
-
         target = member or interaction.user
         try:
             user_id = int(target.id)
@@ -43,15 +40,14 @@ class custom_perms(commands.Cog):
         name="editperms",
         description="Добавить/удалить роль пользователю (permsmanager+)"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def editperms(
         self,
         interaction: discord.Interaction,
         member: discord.Member,
         set: bool
     ):
-        if interaction.guild is None:
-            await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=True)
-            return
 
         manager_id = int(interaction.user.id)
         target_id = int(member.id)

@@ -16,16 +16,13 @@ class tempvoice(commands.Cog):
         name="set_tempvoice",
         description="Установить voice-канал как триггер для TempVoice (owner only)"
         )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def set_tempvoice(
         self,
         interaction: discord.Interaction,
         channel: discord.VoiceChannel
         ):
-
-        if interaction.guild is None:
-            await interaction.response.send_message("Команда только на сервере.", ephemeral=True)
-            return
-
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас недостаточно прав для этой команды.", ephemeral=True)
             return
@@ -45,17 +42,13 @@ class tempvoice(commands.Cog):
         name="unset_tempvoicechannel",
         description="Удалить TempVoice триггер (owner only)"
         )
-    
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def unset_tempvoicechannel(
         self,
         interaction: discord.Interaction,
         channel: discord.VoiceChannel | None = None
         ):
-
-        if interaction.guild is None:
-            await interaction.response.send_message("Команда только на сервере.", ephemeral=True)
-            return
-
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас недостаточно прав для этой команды.", ephemeral=True)
             return
@@ -74,10 +67,9 @@ class tempvoice(commands.Cog):
         name="send_tempvoicepanel",
         description="Отправить панель TempVoice (owner only)"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def send_tempvoicepanel(self, interaction: discord.Interaction, trigger: discord.VoiceChannel | None, channel: discord.TextChannel | None = None):
-        if interaction.guild is None:
-            await interaction.response.send_message("Только на сервере.", ephemeral=True)
-            return
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             await interaction.response.send_message("У вас недостаточно прав.", ephemeral=True)
             return

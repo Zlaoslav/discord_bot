@@ -92,6 +92,8 @@ class togif(commands.Cog):
         name="togif",
         description="Преобразовать видео/фото в GIF"
     )
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def togif(
         self,
         interaction: discord.Interaction,

@@ -11,6 +11,8 @@ class voice_move(commands.Cog):
         name="move_all",
         description="Переместить всех [owner only]"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def move_all(
         self,
         interaction: discord.Interaction,
@@ -31,6 +33,8 @@ class voice_move(commands.Cog):
         name="disconnect_all",
         description="Отключить всех [owner only]"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def disconnect_all(
         self,
         interaction: discord.Interaction,

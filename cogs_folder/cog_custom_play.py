@@ -42,6 +42,8 @@ class custom_play(commands.Cog):
         name="play",
         description="Запуск песни по URL или названию с ютуба (CUSTOMPLAY only)"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def play(
         self,
         interaction: discord.Interaction,
@@ -49,9 +51,6 @@ class custom_play(commands.Cog):
         ):
 
         vc = interaction.guild.voice_client
-        if interaction.guild is None:
-            await interaction.response.send_message("Только на сервере.", ephemeral=True)
-            return
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.CUSTOMPLAY):
             await interaction.response.send_message("У вас недостаточно прав.", ephemeral=True)
             return
@@ -97,15 +96,14 @@ class custom_play(commands.Cog):
         name="skip",
         description="Пропуск песни (CUSTOMPLAY only)"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def skip(
         self,
         interaction: discord.Interaction
     ):
         
         vc = interaction.guild.voice_client
-        if interaction.guild is None:
-            await interaction.response.send_message("Только на сервере.", ephemeral=True)
-            return
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.CUSTOMPLAY):
             await interaction.response.send_message("У вас недостаточно прав.", ephemeral=True)
             return
@@ -120,15 +118,14 @@ class custom_play(commands.Cog):
         name="stop",
         description="Остоновка песни (CUSTOMPLAY only)"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def stop(
         self,
         interaction: discord.Interaction
     ):
         
         vc = interaction.guild.voice_client
-        if interaction.guild is None:
-            await interaction.response.send_message("Только на сервере.", ephemeral=True)
-            return
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.CUSTOMPLAY):
             await interaction.response.send_message("У вас недостаточно прав.", ephemeral=True)
             return

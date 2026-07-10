@@ -14,15 +14,12 @@ class soundpad(commands.Cog):
         name="soundpanel",
         description="Выбрать и проиграть звук из списка доступных"
     )
-    async def playsound(
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
+    async def soundpanel(
         self,
         interaction: discord.Interaction
     ):
-        
-        if interaction.guild is None:
-            await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
-            return
-
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.SOUNDPAD):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=True)
             logger.debug(f"{interaction.user.name} try use soundpanel ({interaction.user.id})")
@@ -41,20 +38,21 @@ class soundpad(commands.Cog):
         name="join",
         description="Войти в войс"
     )
-    async def say(
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
+    async def join(
         self,
         interaction: discord.Interaction,
         channel: discord.VoiceChannel | None=None
     ):
-        
-        await interaction.response.defer(ephemeral=False)
+        if interaction.guild == None:
+            await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
+            return
+
         try:
             await interaction.guild.me.edit(mute=False)
             await interaction.guild.me.edit(deafen=True)
         except: pass
-        if interaction.guild is None:
-            await interaction.followup.send("Эта команда работает только на сервере.", ephemeral=False)
-            return
 
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.JOIN):
             await interaction.followup.send("У вас недостаточно прав использовать эту команду!.", ephemeral=False)
@@ -65,6 +63,14 @@ class soundpad(commands.Cog):
             if channel == None:
                 channel = interaction.user.voice.channel
 
+            if channel == None:
+                await interaction.followup.send("Вы должны быть в голосовом канале или указать канал для подключения.", ephemeral=False)
+                return
+            
+            if not channel.permissions_for(interaction.guild.me).connect:
+                await interaction.followup.send("У бота недостаточно прав для подключения к этому каналу.", ephemeral=False)
+                return
+
             if interaction.guild.voice_client:
                 await interaction.guild.voice_client.move_to(channel)
             else:
@@ -73,12 +79,14 @@ class soundpad(commands.Cog):
             await interaction.followup.send(f"✅ Подключился к {channel.name}", ephemeral=False)
         except Exception as e:
             logger.warning(e)
-            await interaction.followup.send(f"Ошибка: отключения!", ephemeral=False)
+            await interaction.followup.send(f"Ошибка подключения!")
 
     @app_commands.command(
         name="leave",
         description="Выйти из войса"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def leave(
         self,
         interaction: discord.Interaction
@@ -103,21 +111,18 @@ class soundpad(commands.Cog):
             if e == "NoneType":
                 await interaction.response.send_message(f"Ошибка: бот не в голосовом канале!", ephemeral=False)
             else:
-                await interaction.response.send_message(f"Ошибка: подключения!", ephemeral=False)
+                await interaction.response.send_message(f"Ошибка отключения!", ephemeral=False)
 
     @app_commands.command(
         name="stopsound",
         description="Остановить воспроизведение звука"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def stopsound(
         self,
         interaction: discord.Interaction
     ):
-
-        if interaction.guild is None:
-            await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
-            return
-
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.SOUNDPAD):
             await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=False)
             logger.debug(f"{interaction.user.name} try use stopsound")
