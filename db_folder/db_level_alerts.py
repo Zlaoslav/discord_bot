@@ -33,7 +33,7 @@ class LevelAlertsRepository:
 
         cursor = await self.db.execute(
             f"""
-                SELECT channel_id
+                SELECT {self.__TABLE}
                 FROM level_alerts
                 WHERE guild_id = ?
             """,
@@ -42,3 +42,19 @@ class LevelAlertsRepository:
 
         row = await cursor.fetchone()
         return row[0] if row and row[0] is not None else None
+
+
+    async def delete_level_alerts_channel(
+        self,
+        guild_id: int
+    ) -> bool:
+        """Удаляет канал уведомлений для гильдии из базы данных."""
+        await self.db.execute(
+            f"""
+                DELETE FROM {self.__TABLE}
+                WHERE guild_id = ?
+            """,
+            (guild_id,)
+        )
+        await self.db.commit()
+        return True

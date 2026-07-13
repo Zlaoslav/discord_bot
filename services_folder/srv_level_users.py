@@ -1,5 +1,5 @@
 from bot import Bot
-from discord import Interaction as Type_Interaction
+from discord import NotFound
 from services_folder.hlpr_logging import logger
 import services_folder.hlpr_perms_manager as hlpr_perms_manager
 from configs_folder.advanced_settings import MAX_LEVEL, USER_LEVEL_COOLDOWN
@@ -113,6 +113,8 @@ async def on_xp_added(bot: Bot, guild_id: int, user_id: int):
                     await ch.send(
                         f"🎉 <@{user_id}> достиг уровня **{new_level}**! Поздравляем!"
                     )
+            except NotFound:
+                await bot.db.level_alerts.delete_level_alerts_channel(guild_id)
             except Exception as e:
                 logger.warning(f"Не удалось отправить уведомление: {e}")
 
