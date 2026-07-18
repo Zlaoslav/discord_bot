@@ -65,5 +65,28 @@ class dice(commands.Cog):
             await interaction.response.send_message("Ошибка, недопустимые числа!", ephemeral=True)
 
 
+    @app_commands.command(
+        name="d_choose",
+        description="Подкинуть кубик с любыми значениями"
+    )
+    @app_commands.describe(args="Укажите значения через запятую, например: правда, ложь, может быть")
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
+    async def d_choose(
+        self,
+        interaction: discord.Interaction,
+        args: str
+    ):
+        if not args:
+            await interaction.response.send_message("Ошибка, необходимо указать значения!", ephemeral=True)
+            return
+
+        try:
+            values = [arg.strip() for arg in args.split(',')]
+            await interaction.response.send_message(f"Подкинув кубик с значениями {values} выпало: `{random.choice(values)}`")
+        except:
+            await interaction.response.send_message("Ошибка, недопустимые значения!", ephemeral=True)
+
+
 async def setup(bot: Bot):
     await bot.add_cog(dice(bot))
