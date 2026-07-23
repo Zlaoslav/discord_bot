@@ -89,5 +89,27 @@ class other_slash_cmds(commands.Cog):
         for guild in self.bot.guilds:
             to_send += f"{guild.name} - {guild.id}\n"
         await interaction.response.send_message(to_send)
+
+    @app_commands.command(
+        name="send_dm",
+        description="Отправить сообщение в dm"
+    )
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
+    async def get_guilds(
+        self,
+        interaction: discord.Interaction,
+        message: str,
+        user_id: int
+    ):
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
+            return
+        user = await self.bot.fetch_user(user_id)
+        if not user:
+            await interaction.response.send_message("Пользователь не найден")
+            return
+        await user.send(message)
+        await interaction.response.send_message("Успешно!")
+
 async def setup(bot: Bot):
     await bot.add_cog(other_slash_cmds(bot))
