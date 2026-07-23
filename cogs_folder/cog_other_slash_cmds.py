@@ -100,7 +100,7 @@ class other_slash_cmds(commands.Cog):
         self,
         interaction: discord.Interaction,
         message: str,
-        user_id: int
+        user_id
     ):
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             return
