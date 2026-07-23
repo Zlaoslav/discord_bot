@@ -100,16 +100,20 @@ class other_slash_cmds(commands.Cog):
         self,
         interaction: discord.Interaction,
         message: str,
-        user_id
+        user_id: str
     ):
-        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
-            return
-        user = await self.bot.fetch_user(user_id)
-        if not user:
-            await interaction.response.send_message("Пользователь не найден")
-            return
-        await user.send(message)
-        await interaction.response.send_message("Успешно!")
+        try:
+            if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
+                return
+            user = await self.bot.fetch_user(user_id)
+            if not user:
+                await interaction.response.send_message("Пользователь не найден")
+                return
+            await user.send(int(message))
+            await interaction.response.send_message("Успешно!")
+        except Exception as e:
+            logger.error(e)
+            await interaction.response.send_message("Ошибка")
 
 async def setup(bot: Bot):
     await bot.add_cog(other_slash_cmds(bot))
