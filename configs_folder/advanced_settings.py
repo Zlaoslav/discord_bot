@@ -359,3 +359,5 @@ RADIO_STATIONS = {
     "Zaycev Folk": "https://zaycevfm.cdnvideo.ru/ZaycevFM_folk_256.mp3",
     "Zaycev Classic": "https://zaycevfm.cdnvideo.ru/ZaycevFM_classic_256.mp3",
 }
+ALERT_CHANNEL_ID = 1529770793821540423
+# Канал для алёртов

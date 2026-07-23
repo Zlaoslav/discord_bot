@@ -18,3 +18,5 @@ aiosqlite
 deep_translator
 pillow
 moviepy
+discord-ext-voice-recv
+cryptography

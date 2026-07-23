@@ -3,6 +3,7 @@ perms_data.json
 settings.json
 bot_state.db
 .directory
+srv_alert.py
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

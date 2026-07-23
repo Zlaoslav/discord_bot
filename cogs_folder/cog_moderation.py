@@ -258,7 +258,7 @@ class moderation(commands.Cog):
             return await interaction.response.send_message("У вас нет прав на добавление интеграции.", ephemeral=True)
 
         try:
-            integration = await interaction.guild.create_integration(integration_id=integration_id)
+            integration = await interaction.guild.create_integration(type=discord.BotIntegration,id=integration_id)
             await interaction.response.send_message(f"Интеграция {integration.name} добавлена.")
         except discord.Forbidden:
             await interaction.response.send_message("У бота нет прав на управление интеграциями!", ephemeral=True)

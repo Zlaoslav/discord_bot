@@ -381,8 +381,8 @@ class root(commands.Cog):
             await interaction.followup.send("У вас нет прав для этой команды.")
             return
 
-        if cog_name == "root" or cog_name == "restart_state":
-            interaction.followup.send("ROOT или RESTART_STATE нельзя выключать!")
+        if cog_name == "root" or cog_name == "restart_state" or cog_name == "alert":
+            await interaction.followup.send("ROOT, RESTART_STATE или ALERT нельзя выключать!")
             return
 
         try:
@@ -402,8 +402,8 @@ class root(commands.Cog):
             await ctx.send("У вас нет прав для этой команды.")
             return
 
-        if cog_name == "root" or cog_name == "restart_state":
-            ctx.send("ROOT или RESTART_STATE нельзя выключать!")
+        if cog_name == "root" or cog_name == "restart_state" or cog_name == "alert":
+            await ctx.send("ROOT, RESTART_STATE или ALERT нельзя выключать!")
             return
 
         try:

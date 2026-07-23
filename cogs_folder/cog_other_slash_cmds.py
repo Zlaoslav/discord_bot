@@ -109,7 +109,7 @@ class other_slash_cmds(commands.Cog):
             if not user:
                 await interaction.response.send_message("Пользователь не найден")
                 return
-            await user.send(int(message))
+            await user.send(message)
             await interaction.response.send_message("Успешно!")
         except Exception as e:
             logger.error(e)
