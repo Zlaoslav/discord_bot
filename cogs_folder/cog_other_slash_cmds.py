@@ -87,7 +87,7 @@ class other_slash_cmds(commands.Cog):
     ):
         to_send = ""
         for guild in self.bot.guilds:
-            to_send =+ f"{guild.name} - {guild.id}\n"
+            to_send += f"{guild.name} - {guild.id}\n"
         await interaction.response.send_message(to_send)
 async def setup(bot: Bot):
     await bot.add_cog(other_slash_cmds(bot))
