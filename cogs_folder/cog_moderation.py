@@ -242,5 +242,30 @@ class moderation(commands.Cog):
             logger.exception(e)
             await interaction.response.send_message("Ошибка при восстановлении ролей.", ephemeral=True)
 
+
+    @app_commands.command(
+        name="add_integration",
+        description="Добавить интеграцию"
+    )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
+    async def add_integration(
+        self,
+        interaction: discord.Interaction,
+        integration_id: str
+    ):
+        if  not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.HOST):
+            return await interaction.response.send_message("У вас нет прав на добавление интеграции.", ephemeral=True)
+
+        try:
+            integration = await interaction.guild.create_integration(integration_id=integration_id)
+            await interaction.response.send_message(f"Интеграция {integration.name} добавлена.")
+        except discord.Forbidden:
+            await interaction.response.send_message("У бота нет прав на управление интеграциями!", ephemeral=True)
+        except Exception as e:
+            logger.exception(e)
+            await interaction.response.send_message("Ошибка при добавлении интеграции.", ephemeral=True)
+
+
 async def setup(bot: Bot):
     await bot.add_cog(moderation(bot))

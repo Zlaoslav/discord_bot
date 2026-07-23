@@ -73,7 +73,21 @@ class other_slash_cmds(commands.Cog):
     ):
         owner = interaction.guild.owner
         await interaction.response.send_message(f"Владелец сервера: {owner.mention}", allowed_mentions=discord.AllowedMentions.none())
-        
 
+        
+    @app_commands.command(
+        name="get_guilds",
+        description="Узнать, сервера где есть бот"
+    )
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
+    async def get_guilds(
+        self,
+        interaction: discord.Interaction
+    ):
+        to_send = ""
+        for guild in self.bot.guilds:
+            to_send =+ f"{guild.name} - {guild.id}\n"
+        await interaction.response.send_message(to_send)
 async def setup(bot: Bot):
     await bot.add_cog(other_slash_cmds(bot))
