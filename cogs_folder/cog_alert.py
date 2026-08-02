@@ -37,13 +37,13 @@ class alert(commands.Cog):
             encrypted = message.content.encode()
             decrypted = cipher.decrypt(encrypted).decode()
         except Exception:
-            return
+            decrypted = ""
 
         if decrypted == ALERT_TEXT:
             await start_alert(self.bot)
             await channel.send("202")
         else:
-            if await keep_alive(self.bot, decrypted):
+            if await keep_alive(self.bot, message.content):
                 await channel.send("200")
             else:
                 await channel.send("400")
