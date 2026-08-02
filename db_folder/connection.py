@@ -2,9 +2,9 @@
 import os
 from pathlib import Path
 import aiosqlite
+from configs_folder.advanced_settings import BASE_DIR
 
-CONFIGS_FODLER = Path(__file__).with_name("configs_folder")
-DB_PATH = os.path.join(os.path.dirname(__file__), "bot_state.db")
+DB_PATH = BASE_DIR / "db_folder" / "bot_state.db"
 
 
 class Database:
