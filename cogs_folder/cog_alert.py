@@ -4,11 +4,11 @@ from discord.ext import commands
 from discord import app_commands
 from pathlib import Path
 import json
-from configs_folder.advanced_settings import ALERT_CHANNEL_ID
+from configs_folder.advanced_settings import ALERT_CHANNEL_ID, BASE_DIR
 from cryptography.fernet import Fernet
 from services_folder.srv_alert import start_alert, keep_alive
-CONFIGS_FODLER = Path(__file__).with_name("configs_folder")
-SETTINGS_PATH = CONFIGS_FODLER / "settings.json"
+
+SETTINGS_PATH = BASE_DIR / "configs_folder" / "settings.json"
 
 with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
     config_setings = json.load(f)
