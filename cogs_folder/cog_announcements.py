@@ -73,8 +73,6 @@ class announcements(commands.Cog):
         if not perms.manage_messages:
             return
         
-        if message.is_crossposted():
-            return
 
         try:
             await message.publish()
@@ -112,8 +110,6 @@ class announcements(commands.Cog):
             
             # Обновления последних 100 сообщений
             async for message in channel.history(limit=100):
-                if message.is_crossposted():
-                    break
                 try:
                     await message.publish()
                 except Forbidden:

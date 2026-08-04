@@ -16,6 +16,7 @@ from .db_restart_state import RestartStateRepository
 from .db_announcements import AnnouncementsRepository
 from .db_nobots_state import NobotsStateRepository
 from .db_deadmin_roles import DeadminRolesRepository
+from .db_keep_alive import KeepAliveRepository
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "bot_state.db")
 
@@ -33,6 +34,8 @@ class DB:
     auto_announcements: AnnouncementsRepository
     nobots_state: NobotsStateRepository
     deadmin_roles: DeadminRolesRepository
+    keep_alive: KeepAliveRepository
+
     def __init__(self):
         self.database = Database(DB_PATH)
 
@@ -51,6 +54,7 @@ class DB:
         self.auto_announcements = AnnouncementsRepository(db)
         self.nobots_state = NobotsStateRepository(db)
         self.deadmin_roles = DeadminRolesRepository(db)
+        self.keep_alive = KeepAliveRepository(db)
 
     async def init_db(self):
         await init_db()

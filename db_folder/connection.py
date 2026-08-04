@@ -157,4 +157,12 @@ async def init_db():
                 );
             """)
 
+            # Таблица keep_alive
+            await cur.execute("""
+                CREATE TABLE IF NOT EXISTS keep_alive (
+                    date TEXT PRIMARY KEY
+                );
+            """)
+
+
         await conn.commit()

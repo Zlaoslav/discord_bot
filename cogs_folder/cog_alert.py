@@ -7,8 +7,8 @@ import json
 from configs_folder.advanced_settings import ALERT_CHANNEL_ID, BASE_DIR
 from cryptography.fernet import Fernet
 from services_folder.srv_alert import start_alert, keep_alive
-
-SETTINGS_PATH = BASE_DIR / "configs_folder" / "settings.json"
+import services_folder.hlpr_perms_manager as perms_manager
+SETTINGS_PATH  = BASE_DIR / "configs_folder" / "settings.json"
 
 with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
     config_setings = json.load(f)
@@ -27,6 +27,17 @@ class alert(commands.Cog):
         self.bot = bot
 
 
+    @commands.command(name="check_alert")
+    async def check_alert(self, ctx: commands.Context, time: int = 30):
+        if time <= 0:
+            await ctx.send("Время должно быть больше 0")
+            return
+        if not (ctx.author.id in users_ids
+                or perms_manager.has_perm(ctx.author.id, perms_manager.PermRole.HOST)):
+            await ctx.send("У вас нет прав для этой команды.")
+            return
+        await ctx.send(await self.bot.db.keep_alive.check_keep_alive(time))
+        
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         channel = message.channel
@@ -42,14 +53,15 @@ class alert(commands.Cog):
             decrypted = ""
 
         if decrypted == ALERT_TEXT:
-            await start_alert(self.bot)
             await channel.send("202")
+            await message.delete()
+            await start_alert(self.bot, False)
         else:
             if await keep_alive(self.bot, message.content):
                 await channel.send("200")
             else:
                 await channel.send("400")
-        await message.delete()
+            await message.delete()
 
 
     @commands.Cog.listener()
