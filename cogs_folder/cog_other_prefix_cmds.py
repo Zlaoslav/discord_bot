@@ -138,5 +138,45 @@ class other_prefix_cmds(commands.Cog):
         await ctx.send(embed=embed)
 
 
+    @commands.command(name="get_invite_link")
+    async def get_invite_link(self, ctx: commands.Context, id):
+        if not perms_manager.has_perm(ctx.author.id, perms_manager.PermRole.OWNER):
+            await ctx.send("У вас нет прав для этой команды.")
+            return
+        if not id.isdigit():
+            await ctx.send("❌ ID сервера должен быть числом.")
+            return
+        guild = self.bot.get_guild(int(id))
+        if not guild:
+            await ctx.send("❌ Сервер не найден.")
+            return
+        invite = await guild.invites()
+        if invite:
+            await ctx.send(f"🔗 Пригласительная ссылка для {guild.name}: {invite[0].url}")
+        else:
+            await ctx.send("❌ Не удалось получить пригласительную ссылку.")
+
+
+    @commands.command(name="create_invite_link")
+    async def create_invite_link(self, ctx: commands.Context, id):
+        if not perms_manager.has_perm(ctx.author.id, perms_manager.PermRole.OWNER):
+            await ctx.send("У вас нет прав для этой команды.")
+            return
+        if not id.isdigit():
+            await ctx.send("❌ ID сервера должен быть числом.")
+            return
+        guild = self.bot.get_guild(int(id))
+        if not guild:
+            await ctx.send("❌ Сервер не найден.")
+            return
+        # Получаем текстовый канал для создания ссылки
+        text_channels = [channel for channel in guild.text_channels if channel.permissions_for(guild.me).create_instant_invite]
+        if not text_channels:
+            await ctx.send("❌ Нет доступных текстовых каналов для создания пригласительной ссылки.")
+            return
+        invite = await text_channels[0].create_invite(max_age=60, max_uses=1, unique=True)
+        await ctx.send(f"🔗 Создана новая пригласительная ссылка для {guild.name}: {invite.url}\nОна действует 60 секунд!")
+
+    
 async def setup(bot: Bot):
     await bot.add_cog(other_prefix_cmds(bot))
