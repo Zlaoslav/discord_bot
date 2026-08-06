@@ -73,9 +73,11 @@ class SoundSelect(Select):
         # можно добавить опции (before_options, options) при необходимости
         source = discord.FFmpegPCMAudio(str(sound_path), executable=FFMPEG_PATH)
         try:
-            vc.play(source, after=lambda err: logger.debug(f"play finished {err}") if err else None)
+            vc.play(source, after=lambda err: logger.error(f"play finished: {err!r}") if err else None)
         except Exception as e:
-            await interaction.followup.send(f"Ошибка воспроизведения: {e}", ephemeral=True)
+            import traceback
+            logger.exception("Ошибка воспроизведения")
+            await interaction.followup.send(f"Ошибка воспроизведения: {e!r}. Подробности в логах.", ephemeral=True)
             return
         # необязательно: можно отсоединять через некоторое время, или оставить постоянное подключение
         # пример: отсоединиться после окончания — сложнее отслеживать, можно поставить таймер в фоне
