@@ -33,8 +33,8 @@ class LevelAlertsRepository:
 
         cursor = await self.db.execute(
             f"""
-                SELECT {self.__TABLE}
-                FROM level_alerts
+                SELECT channel_id
+                FROM {self.__TABLE}
                 WHERE guild_id = ?
             """,
             (guild_id,)
