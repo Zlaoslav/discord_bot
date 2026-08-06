@@ -94,5 +94,49 @@ class other_prefix_cmds(commands.Cog):
         else:
             await ctx.send("❌ Ошибка при удалении локальных команд. Смотри лог.")
 
+
+    @commands.command(name="guilds")
+    async def guilds(self, ctx: commands.Context):
+        if not perms_manager.has_perm(ctx.author.id, perms_manager.PermRole.OWNER):
+            await ctx.send("У вас нет прав для этой команды.")
+            return
+        guilds = sorted(self.bot.guilds, key=lambda g: g.member_count or 0, reverse=True)
+
+        embed = discord.Embed(
+            title="🌐 Серверы бота",
+            description=f"**Всего серверов:** `{len(guilds)}`",
+            color=discord.Color.blurple()
+        )
+
+        text = []
+        for i, guild in enumerate(guilds, start=1):
+            text.append(
+                f"`{i:02}` **{guild.name}**\n"
+                f"├ ID: `{guild.id}`\n"
+                f"└ Участников: `{guild.member_count}`"
+            )
+
+        if not text:
+            embed.description += "\n\nБот не состоит ни на одном сервере."
+        else:
+            # Discord ограничивает Embed полем в 1024 символа
+            chunk = ""
+            for line in text:
+                if len(chunk) + len(line) + 2 > 1024:
+                    embed.add_field(name="\u200b", value=chunk, inline=False)
+                    chunk = ""
+                chunk += line + "\n\n"
+
+            if chunk:
+                embed.add_field(name="\u200b", value=chunk, inline=False)
+
+        embed.set_footer(
+            text=f"Запросил {ctx.author}",
+            icon_url=ctx.author.display_avatar.url
+        )
+
+        await ctx.send(embed=embed)
+
+
 async def setup(bot: Bot):
     await bot.add_cog(other_prefix_cmds(bot))
