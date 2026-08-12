@@ -45,6 +45,7 @@ class soundpad(commands.Cog):
         interaction: discord.Interaction,
         channel: discord.VoiceChannel | None=None
     ):
+        await interaction.response.defer(ephemeral=False)
         if interaction.guild == None:
             await interaction.response.send_message("Эта команда работает только на сервере.", ephemeral=False)
             return
