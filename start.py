@@ -770,10 +770,14 @@ async def wait_for_remote_release(channel):
 
 async def run_main_job():
     print("Main job started (master).")
-    send_status(f"```diff\n+ StartUp By {USERNAME}\n```", thread_id=MAIN_THREAD_ID)
+
+    send_status(
+        f"```diff\n+ StartUp By {USERNAME}\n```",
+        thread_id=MAIN_THREAD_ID
+    )
 
     loop = asyncio.get_running_loop()
-    asyncio.create_task(loop.run_in_executor(None, run_bot_loop))
+    bot_future = loop.run_in_executor(None, run_bot_loop)
 
     try:
         while not shutdown_requested:
@@ -799,8 +803,18 @@ async def run_main_job():
 
         await client.close()
 
+        # Ждём завершения run_bot_loop
+        try:
+            await asyncio.wait_for(asyncio.wrap_future(bot_future), timeout=10)
+        except asyncio.TimeoutError:
+            print("[WARN] run_bot_loop не завершился за 10 секунд")
+        except Exception as e:
+            print("[ERROR] Ошибка run_bot_loop:")
+            print(e)
+
     except asyncio.CancelledError:
         print("Main job cancelled.")
+        raise
 
 async def startup_sequence():
     if not acquire_local_lock():
