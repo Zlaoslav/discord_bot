@@ -1,8 +1,5 @@
 from __future__ import annotations
-from async_console import AsyncConsole
 from configs_folder.advanced_settings import REPO_URL, MAIN_SERVER_NAME
-console = AsyncConsole()
-console.start()
 import os
 import sys
 import subprocess
