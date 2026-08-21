@@ -27,7 +27,9 @@ class role_reactions(commands.Cog):
         """Создаёт сообщение в канале с реакцией, которая выдаёт роль."""
 
         # Проверяем права
-        if not interaction.user.guild_permissions.manage_roles or perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.HOST):
+        if not (interaction.user.guild_permissions.manage_roles
+                or interaction.user.guild_permissions.administrator
+                or perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.HOST)):
             await interaction.response.send_message("❌ У вас нет прав на управление ролями.", ephemeral=True)
             return
 
