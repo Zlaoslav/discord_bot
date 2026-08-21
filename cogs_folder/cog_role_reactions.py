@@ -118,6 +118,7 @@ class role_reactions(commands.Cog):
                 await member.add_roles(role, reason=f"Role reaction на {emoji_str}")
 
             # Отправляем личное сообщение пользователю
+            return
             try:
                 if had_role:
                     await member.send(f"ℹ️ Вы уже имели роль **{role.name}**")
@@ -168,6 +169,7 @@ class role_reactions(commands.Cog):
                 await member.remove_roles(role, reason=f"Удалена реакция на {emoji_str}")
 
             # Отправляем личное сообщение пользователю
+            return
             try:
                 if had_role:
                     await member.send(f"✅ У вас была забрана роль **{role.name}**")
