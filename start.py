@@ -15,23 +15,31 @@ current_bot_proc = None
 def signal_handler(signum, frame):
     global shutdown_requested, current_bot_proc
 
-    print(f"[INFO] Получен сигнал {signum}")
+    # Не используем logger внутри signal handler:
+    # он может вызвать reentrant call при записи в stderr.
+    print(f"[INFO] Получен сигнал {signum}", flush=True)
+
     shutdown_requested = True
 
     if current_bot_proc and current_bot_proc.poll() is None:
         try:
-            print("[INFO] Отправка сигнала SIGTERM запущенному процессу...")
+            print(
+                "[INFO] Отправка SIGTERM запущенному процессу...",
+                flush=True
+            )
             current_bot_proc.send_signal(signal.SIGTERM)
-            current_bot_proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            print("[WARN] Процесс не завершился по SIGTERM, отправка SIGKILL...")
-            current_bot_proc.kill()
-            current_bot_proc.wait()
-        except Exception as e:
-            print(f"[ERROR] Ошибка при завершении запущенного процесса: {e}")
 
-    print("[INFO] Завершение работы start.py")
-    sys.exit(0)
+        except ProcessLookupError:
+            print(
+                "[INFO] Дочерний процесс уже завершился",
+                flush=True
+            )
+
+        except Exception as e:
+            print(
+                f"[ERROR] Ошибка при отправке SIGTERM: {e}",
+                flush=True
+            )
 
 signal.signal(signal.SIGTERM, signal_handler)
 signal.signal(signal.SIGINT, signal_handler)
