@@ -15,22 +15,29 @@ import signal
 shutdown_requested = False
 current_bot_proc = None
 
-def linux_shutdown(signum, frame):
-    global shutdown_requested
+def signal_handler(signum, frame):
+    global shutdown_requested, current_bot_proc
 
     print(f"[INFO] Получен сигнал {signum}")
     shutdown_requested = True
 
-    global current_bot_proc
+    if current_bot_proc and current_bot_proc.poll() is None:
+        try:
+            print("[INFO] Отправка сигнала SIGTERM запущенному процессу...")
+            current_bot_proc.send_signal(signal.SIGTERM)
+            current_bot_proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            print("[WARN] Процесс не завершился по SIGTERM, отправка SIGKILL...")
+            current_bot_proc.kill()
+            current_bot_proc.wait()
+        except Exception as e:
+            print(f"[ERROR] Ошибка при завершении запущенного процесса: {e}")
 
-    try:
-        if current_bot_proc and current_bot_proc.poll() is None:
-            current_bot_proc.terminate()
-    except Exception as e:
-        print(e)
+    print("[INFO] Завершение работы start.py")
+    sys.exit(0)
 
-signal.signal(signal.SIGTERM, linux_shutdown)
-signal.signal(signal.SIGINT, linux_shutdown)
+signal.signal(signal.SIGTERM, signal_handler)
+signal.signal(signal.SIGINT, signal_handler)
 CURRENT_DIR = Path(__file__).parent.resolve()
 BOT_FILE = CURRENT_DIR / "bot.py"
 REQUIREMENTS = CURRENT_DIR / "requirements.txt"
