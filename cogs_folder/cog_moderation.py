@@ -267,5 +267,27 @@ class moderation(commands.Cog):
             await interaction.response.send_message("Ошибка при добавлении интеграции.", ephemeral=True)
 
 
+    @app_commands.command(
+        name="reset_all_nicknames",
+        description="Сбросить всех пользователей"
+    )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
+    async def reset_all_nicknames(
+        self,
+        interaction: discord.Interaction,
+    ):
+        if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
+            return await interaction.response.send_message("У вас нет прав на сброс никнеймов", ephemeral=False)
+
+        count = 0
+        for member in interaction.guild.members:
+            try:
+                await member.edit(nick=None)
+                count += 1
+            except Exception:
+                pass
+        await interaction.response.send_message(f"Никнеймы успешно сброшены у {count} участников")
+
 async def setup(bot: Bot):
     await bot.add_cog(moderation(bot))
