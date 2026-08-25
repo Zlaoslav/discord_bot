@@ -279,7 +279,7 @@ class moderation(commands.Cog):
     ):
         if not perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER):
             return await interaction.response.send_message("У вас нет прав на сброс никнеймов", ephemeral=False)
-
+        await interaction.response.defer(ephemeral=False)
         count = 0
         for member in interaction.guild.members:
             try:
@@ -287,7 +287,7 @@ class moderation(commands.Cog):
                 count += 1
             except Exception:
                 pass
-        await interaction.response.send_message(f"Никнеймы успешно сброшены у {count} участников")
+        await interaction.followup.send(f"Никнеймы успешно сброшены у {count} участников")
 
 async def setup(bot: Bot):
     await bot.add_cog(moderation(bot))
