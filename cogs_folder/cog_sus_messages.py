@@ -119,7 +119,7 @@ class sus_messages(commands.Cog):
                 or "поллпи" in msglow
                 or "pollpi" in msglow
         
-            ) and not message.author.bot:
+            ) and not message.author.bot and False:
             await message.reply(
                         await ask_groq(
                             f"С тобой разговаривает: {message.author.name}. Сообщение: " + str(message.content)
