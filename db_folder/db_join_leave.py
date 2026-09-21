@@ -12,7 +12,8 @@ class JoinLeaveRepository:
         guild_id : int,
         channel_id: Optional[int],
         role_id: int | None = None,
-        welcome_message: str | None = None
+        welcome_message: str | None = None,
+        show_leave_message: bool | None = True
     ) -> bool:
         """Сохраняет ID канала, куда надо отправить уведомление при выходе/входе участников на сервер."""
 
@@ -20,15 +21,16 @@ class JoinLeaveRepository:
         welcome_message = welcome_message or ""
         await self.db.execute(
             f"""
-                INSERT INTO {self.__TABLE} (guild_id, channel_id, mention_role_id, welcome_message)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO {self.__TABLE} (guild_id, channel_id, mention_role_id, welcome_message, show_leave_message)
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(guild_id)
                 DO UPDATE SET
                     channel_id = excluded.channel_id,
                     mention_role_id = excluded.mention_role_id,
-                    welcome_message = excluded.welcome_message
+                    welcome_message = excluded.welcome_message,
+                    show_leave_message = excluded.show_leave_message
             """,
-            (guild_id, channel_id, role_id, welcome_message)
+            (guild_id, channel_id, role_id, welcome_message, int(show_leave_message))
         )
         await self.db.commit()
         return True
@@ -38,7 +40,7 @@ class JoinLeaveRepository:
         """Возвращает сохранённый channel_id для join/leave."""
         cursor = await self.db.execute(
             f"""
-                SELECT channel_id, mention_role_id, welcome_message
+                SELECT channel_id, mention_role_id, welcome_message, show_leave_message
                 FROM {self.__TABLE}
                 WHERE guild_id = ?
             """,
@@ -48,5 +50,18 @@ class JoinLeaveRepository:
         channel_id = row[0] if row else None
         role_id = row[1] if row else None
         welcome_message = row[2] if row else None
-        return (channel_id, role_id, welcome_message)
+        show_leave_message = bool(row[3]) if row else None
+        return (channel_id, role_id, welcome_message, show_leave_message)
 
+
+    async def delete_join_leave_channel(self, guild_id):
+        """Удаляет сохранённый channel_id для join/leave."""
+        await self.db.execute(
+            f"""
+                DELETE FROM {self.__TABLE}
+                WHERE guild_id = ?
+            """,
+            (guild_id,)
+        )
+        await self.db.commit()
+        return True

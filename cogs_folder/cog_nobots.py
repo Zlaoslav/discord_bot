@@ -108,7 +108,7 @@ class nobots(commands.Cog):
                     await member.kick(reason="Режим nobots включён, новые боты не могут зайти на сервер.")
 
                     row = await self.bot.db.join_leave.get_join_leave_channel(member.guild.id)
-                    channel_id, role_id = row
+                    channel_id, _, _, _ = row
                     if channel_id == None:
                         return
                     new_member_channel = member.guild.get_channel(channel_id)

@@ -23,7 +23,8 @@ class join_leave(commands.Cog):
         interaction: discord.Interaction,
         channel: discord.TextChannel | None = None,
         mention_role: discord.Role | None = None,
-        welcome_message: str | None = None
+        welcome_message: str | None = None,
+        show_leave_message: bool | None = True,
         ):
         if not (
             perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER)
@@ -40,17 +41,37 @@ class join_leave(commands.Cog):
         try:
 
 
-            await self.bot.db.join_leave.save_join_leave_channel(interaction.guild.id, targetchanel.id, mention_id, welcome_message)
+            await self.bot.db.join_leave.save_join_leave_channel(interaction.guild.id, targetchanel.id, mention_id, welcome_message, show_leave_message)
             await interaction.response.send_message("Успешно!", ephemeral=True)
         except Exception as e:
             logger.error(e)
             await interaction.response.send_message("Ошибка установки канала! (см логи)", ephemeral=False)
 
+    @app_commands.command(
+        name="remove_join_leave_channel",
+        description="Удалить канал с сообщениями о входе и выходе с сервера (owner only)"
+        )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
+    async def remove_join_leave_channel(self, interaction: discord.Interaction):
+        """Удаляет сохранённый channel_id для join/leave."""
+        if not (
+            perms_manager.has_perm(interaction.user.id, perms_manager.PermRole.OWNER)
+            or interaction.user.guild_permissions.administrator
+        ):
+            await interaction.response.send_message("У вас недостаточно прав использовать эту команду!.", ephemeral=False)
+            return
+        
+        await self.bot.db.join_leave.delete_join_leave_channel(interaction.guild.id)
+        await interaction.response.send_message("Канал для сообщений о входе и выходе с сервера удалён.", ephemeral=True)
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
         row = await self.bot.db.join_leave.get_join_leave_channel(member.guild.id)
-        channel_id, role_id, welcome_message = row = row
+        channel_id, role_id, welcome_message, show_leave_message = row = row
+        if not show_leave_message:
+            return
+    
         if channel_id == None:
             return
 

@@ -43,7 +43,8 @@ async def init_db():
                     guild_id INTEGER PRIMARY KEY,
                     channel_id INTEGER,
                     mention_role_id INTEGER,
-                    welcome_message TEXT
+                    welcome_message TEXT,
+                    show_leave_message INTEGER
                 );
             """)
 
