@@ -50,7 +50,7 @@ class JoinLeaveRepository:
         channel_id = row[0] if row else None
         role_id = row[1] if row else None
         welcome_message = row[2] if row else None
-        show_leave_message = bool(row[3]) if row else None
+        show_leave_message = True if row and row[3] == 1 else False
         return (channel_id, role_id, welcome_message, show_leave_message)
 
 
